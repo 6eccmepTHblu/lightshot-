@@ -35,13 +35,13 @@ const LCS_GM_IMAGES: u32 = 4;
 /// screenshot may appear in the local Win+V history.
 pub fn copy_to_clipboard_with_owner(frame: &Frame, owner: HWND, allow_history: bool) -> Result<()> {
     if owner.is_invalid() {
-        bail!("clipboard owner window is invalid");
+        bail!("окно-владелец буфера обмена недействительно");
     }
     let mut dib = create_dibv5(frame)?;
     let _clipboard = ClipboardGuard::open(owner)?;
 
     // SAFETY: the guard proves that this thread currently has the clipboard open.
-    unsafe { EmptyClipboard() }.context("failed to empty the Windows clipboard")?;
+    unsafe { EmptyClipboard() }.context("не удалось очистить буфер обмена Windows")?;
 
     // These go first so a failure leaves no image on the clipboard unprotected.
     set_policy_format(w!("CanUploadToCloudClipboard"), false)?;
@@ -49,12 +49,12 @@ pub fn copy_to_clipboard_with_owner(frame: &Frame, owner: HWND, allow_history: b
 
     let handle = dib
         .handle
-        .context("clipboard DIB memory was released unexpectedly")?;
+        .context("память изображения для буфера обмена неожиданно освобождена")?;
     // SAFETY: `handle` is movable global memory containing a valid CF_DIBV5
     // payload. On success Windows assumes ownership, and `release` prevents a
     // second free from Rust.
     unsafe { SetClipboardData(u32::from(CF_DIBV5.0), Some(HANDLE(handle.0))) }
-        .context("failed to place the screenshot on the Windows clipboard")?;
+        .context("не удалось поместить снимок в буфер обмена Windows")?;
     dib.release();
     Ok(())
 }
@@ -65,18 +65,20 @@ fn set_policy_format(name: PCWSTR, allowed: bool) -> Result<()> {
     // SAFETY: `name` is a valid null-terminated string from the `w!` macro.
     let format = unsafe { RegisterClipboardFormatW(name) };
     if format == 0 {
-        return Err(WindowsError::from_thread()).context("failed to register a clipboard format");
+        return Err(WindowsError::from_thread())
+            .context("не удалось зарегистрировать формат буфера обмена");
     }
 
     // SAFETY: the allocation is managed by `OwnedGlobalMemory` until Windows owns it.
     let memory = unsafe { GlobalAlloc(GMEM_MOVEABLE, size_of::<u32>()) }
-        .context("failed to allocate clipboard memory")?;
+        .context("не удалось выделить память для буфера обмена")?;
     let mut memory = OwnedGlobalMemory::new(memory);
 
     // SAFETY: the handle is valid movable global memory allocated above.
     let base = unsafe { GlobalLock(memory.handle()) }.cast::<u32>();
     if base.is_null() {
-        return Err(WindowsError::from_thread()).context("failed to lock clipboard memory");
+        return Err(WindowsError::from_thread())
+            .context("не удалось заблокировать память буфера обмена");
     }
     // SAFETY: `base` addresses at least one writable, suitably aligned u32, and
     // the unlock balances the successful `GlobalLock` above. See `create_dibv5`
@@ -89,34 +91,35 @@ fn set_policy_format(name: PCWSTR, allowed: bool) -> Result<()> {
     // SAFETY: the payload is valid and the clipboard is open. On success Windows
     // assumes ownership, and `release` prevents a second free from Rust.
     unsafe { SetClipboardData(format, Some(HANDLE(memory.handle().0))) }
-        .context("failed to place a clipboard policy format")?;
+        .context("не удалось задать запрет для буфера обмена")?;
     memory.release();
     Ok(())
 }
 
 fn create_dibv5(frame: &Frame) -> Result<OwnedGlobalMemory> {
     let width =
-        i32::try_from(frame.width()).context("clipboard image width exceeds the DIB limit")?;
+        i32::try_from(frame.width()).context("ширина изображения превышает предел формата DIB")?;
     let height =
-        i32::try_from(frame.height()).context("clipboard image height exceeds the DIB limit")?;
+        i32::try_from(frame.height()).context("высота изображения превышает предел формата DIB")?;
     let image_bytes = frame.rgba().len();
     let image_size =
-        u32::try_from(image_bytes).context("clipboard image is too large for a DIB")?;
+        u32::try_from(image_bytes).context("изображение слишком велико для формата DIB")?;
     let header_size = size_of::<BITMAPV5HEADER>();
     let allocation_size = header_size
         .checked_add(image_bytes)
-        .context("clipboard allocation size overflow")?;
+        .context("переполнение размера памяти для буфера обмена")?;
 
     // SAFETY: allocation size is checked and the returned handle is managed by
     // `OwnedGlobalMemory` until Windows takes ownership.
     let memory = unsafe { GlobalAlloc(GMEM_MOVEABLE, allocation_size) }
-        .context("failed to allocate clipboard memory")?;
+        .context("не удалось выделить память для буфера обмена")?;
     let memory = OwnedGlobalMemory::new(memory);
 
     // SAFETY: the handle is valid movable global memory allocated above.
     let base = unsafe { GlobalLock(memory.handle()) }.cast::<u8>();
     if base.is_null() {
-        return Err(WindowsError::from_thread()).context("failed to lock clipboard memory");
+        return Err(WindowsError::from_thread())
+            .context("не удалось заблокировать память буфера обмена");
     }
 
     let header = BITMAPV5HEADER {
@@ -154,7 +157,7 @@ fn create_dibv5(frame: &Frame) -> Result<OwnedGlobalMemory> {
 
 fn rgba_to_bgra(source: &[u8], destination: &mut [u8]) -> Result<()> {
     if source.len() != destination.len() || !source.len().is_multiple_of(RGBA_CHANNELS) {
-        bail!("invalid RGBA clipboard buffer length");
+        bail!("неверная длина буфера RGBA для буфера обмена");
     }
 
     for (rgba, bgra) in source
@@ -183,7 +186,7 @@ impl ClipboardGuard {
         }
 
         let error = last_error.unwrap_or_else(WindowsError::from_thread);
-        Err(error).context("the Windows clipboard is busy")
+        Err(error).context("буфер обмена Windows занят")
     }
 }
 
@@ -241,6 +244,6 @@ mod tests {
     fn rejects_a_null_owner_without_touching_the_clipboard() {
         let frame = Frame::new(PhysicalPoint::default(), 1, 1, vec![0, 0, 0, 255]).unwrap();
         let error = copy_to_clipboard_with_owner(&frame, HWND::default(), false).unwrap_err();
-        assert!(error.to_string().contains("owner window is invalid"));
+        assert!(error.to_string().contains("окно-владелец буфера обмена"));
     }
 }

@@ -212,7 +212,7 @@ fn save_atomic_inner(
         .filter(|path| !path.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
     fs::create_dir_all(parent).map_err(|source| EncodeError::Io {
-        operation: "create destination directory",
+        operation: "создать папку для сохранения",
         path: parent.to_path_buf(),
         source,
     })?;
@@ -222,12 +222,12 @@ fn save_atomic_inner(
         temporary_file
             .write_all(contents)
             .map_err(|source| EncodeError::Io {
-                operation: "write temporary screenshot",
+                operation: "записать временный файл снимка",
                 path: temporary_path.clone(),
                 source,
             })?;
         temporary_file.sync_all().map_err(|source| EncodeError::Io {
-            operation: "synchronize temporary screenshot",
+            operation: "сохранить на диск временный файл снимка",
             path: temporary_path.clone(),
             source,
         })
@@ -251,7 +251,7 @@ fn save_atomic_inner(
     if let Err(source) = publish_temporary(&temporary_path, destination, replace_existing) {
         let _ = fs::remove_file(&temporary_path);
         return Err(EncodeError::Io {
-            operation: "publish screenshot",
+            operation: "сохранить снимок",
             path: destination.to_path_buf(),
             source,
         });
@@ -314,16 +314,16 @@ fn publish_temporary(
 
 #[derive(Debug, Error)]
 pub enum EncodeError {
-    #[error("JPEG quality must be between 1 and 100, got {0}")]
+    #[error("качество JPEG должно быть от 1 до 100, указано {0}")]
     InvalidJpegQuality(u8),
 
-    #[error("screenshot destination has no filename: `{}`", .0.display())]
+    #[error("в пути сохранения снимка нет имени файла: `{}`", .0.display())]
     MissingFileName(PathBuf),
 
-    #[error("refusing to overwrite existing screenshot `{}`", .0.display())]
+    #[error("существующий снимок не будет перезаписан: `{}`", .0.display())]
     DestinationExists(PathBuf),
 
-    #[error("failed to {operation} at `{}`: {source}", path.display())]
+    #[error("не удалось {operation} `{}`: {source}", path.display())]
     Io {
         operation: &'static str,
         path: PathBuf,
@@ -331,7 +331,7 @@ pub enum EncodeError {
         source: io::Error,
     },
 
-    #[error("image encoding failed: {0}")]
+    #[error("не удалось закодировать изображение: {0}")]
     Image(#[from] image::ImageError),
 }
 
@@ -371,7 +371,7 @@ fn create_temporary_file(destination: &Path) -> Result<(PathBuf, fs::File), Enco
             Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {}
             Err(source) => {
                 return Err(EncodeError::Io {
-                    operation: "create temporary screenshot",
+                    operation: "создать временный файл снимка",
                     path: temporary_path,
                     source,
                 });
@@ -380,11 +380,11 @@ fn create_temporary_file(destination: &Path) -> Result<(PathBuf, fs::File), Enco
     }
 
     Err(EncodeError::Io {
-        operation: "create a unique temporary screenshot",
+        operation: "создать временный файл снимка с уникальным именем",
         path: parent.to_path_buf(),
         source: io::Error::new(
             io::ErrorKind::AlreadyExists,
-            "temporary screenshot filename attempts exhausted",
+            "исчерпаны попытки подобрать имя временного файла снимка",
         ),
     })
 }

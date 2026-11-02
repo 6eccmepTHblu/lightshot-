@@ -23,28 +23,31 @@ fn main() {
         Ok(None) => {
             rfd::MessageDialog::new()
                 .set_level(rfd::MessageLevel::Info)
-                .set_title("Rustshot is already running")
+                .set_title("Rustshot уже запущен")
                 .set_description(
-                    "Rustshot is already running in this Windows session. Use its tray icon or configured shortcuts.",
+                    "Rustshot уже запущен в этом сеансе Windows. Используйте его значок в трее или горячие клавиши.",
                 )
                 .show();
             return;
         }
         Err(error) => {
-            diagnostics::record_error("Single-instance check failed", &error.to_string());
+            diagnostics::record_error(
+                "Не удалось проверить, запущен ли Rustshot",
+                &error.to_string(),
+            );
             rfd::MessageDialog::new()
                 .set_level(rfd::MessageLevel::Error)
-                .set_title("Rustshot could not start")
+                .set_title("Не удалось запустить Rustshot")
                 .set_description(error.to_string())
                 .show();
             std::process::exit(1);
         }
     };
     if let Err(error) = app::run() {
-        diagnostics::record_error("Rustshot could not start", &error.to_string());
+        diagnostics::record_error("Не удалось запустить Rustshot", &error.to_string());
         rfd::MessageDialog::new()
             .set_level(rfd::MessageLevel::Error)
-            .set_title("Rustshot could not start")
+            .set_title("Не удалось запустить Rustshot")
             .set_description(error.to_string())
             .show();
         std::process::exit(1);
@@ -54,10 +57,10 @@ fn main() {
 #[cfg(target_os = "windows")]
 fn install_panic_dialog() {
     std::panic::set_hook(Box::new(|panic| {
-        diagnostics::record_error("Unexpected panic", &panic.to_string());
+        diagnostics::record_error("Непредвиденный сбой", &panic.to_string());
         rfd::MessageDialog::new()
             .set_level(rfd::MessageLevel::Error)
-            .set_title("Rustshot encountered an unexpected error")
+            .set_title("В Rustshot произошла непредвиденная ошибка")
             .set_description(panic.to_string())
             .show();
     }));

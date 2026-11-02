@@ -28,7 +28,7 @@ impl SingleInstance {
         let wide_name: Vec<u16> = name.encode_utf16().chain(Some(0)).collect();
         // SAFETY: `wide_name` is NUL-terminated and remains alive for the call.
         let handle = unsafe { CreateMutexW(None, false, PCWSTR(wide_name.as_ptr())) }
-            .context("could not create Rustshot's single-instance marker")?;
+            .context("не удалось создать метку единственного экземпляра Rustshot")?;
         // CreateMutexW returns a usable handle and sets last-error when the named
         // object already existed. This check must immediately follow the call.
         let already_running = unsafe { GetLastError() } == ERROR_ALREADY_EXISTS;

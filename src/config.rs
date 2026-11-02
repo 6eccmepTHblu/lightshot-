@@ -92,7 +92,7 @@ impl Config {
             }
             Err(source) => {
                 return Err(ConfigError::Io {
-                    operation: "read",
+                    operation: "прочитать файл настроек",
                     path: path.to_path_buf(),
                     source,
                 });
@@ -124,7 +124,7 @@ impl Config {
         let parent = non_empty_parent(path);
 
         fs::create_dir_all(parent).map_err(|source| ConfigError::Io {
-            operation: "create configuration directory",
+            operation: "создать папку настроек",
             path: parent.to_path_buf(),
             source,
         })?;
@@ -134,12 +134,12 @@ impl Config {
             temporary_file
                 .write_all(serialized.as_bytes())
                 .map_err(|source| ConfigError::Io {
-                    operation: "write temporary configuration",
+                    operation: "записать временный файл настроек",
                     path: temporary_path.clone(),
                     source,
                 })?;
             temporary_file.sync_all().map_err(|source| ConfigError::Io {
-                operation: "synchronize temporary configuration",
+                operation: "сохранить на диск временный файл настроек",
                 path: temporary_path.clone(),
                 source,
             })
@@ -155,7 +155,7 @@ impl Config {
         if let Err(source) = fs::rename(&temporary_path, path) {
             let _ = fs::remove_file(&temporary_path);
             return Err(ConfigError::Io {
-                operation: "replace configuration",
+                operation: "заменить файл настроек",
                 path: path.to_path_buf(),
                 source,
             });
@@ -431,8 +431,8 @@ pub enum ShortcutBinding {
 impl fmt::Display for ShortcutBinding {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Fullscreen => formatter.write_str("fullscreen"),
-            Self::Region => formatter.write_str("region"),
+            Self::Fullscreen => formatter.write_str("весь экран"),
+            Self::Region => formatter.write_str("выбор области"),
         }
     }
 }
@@ -441,7 +441,7 @@ impl fmt::Display for ShortcutBinding {
 #[derive(Debug, Error)]
 pub enum ShortcutError {
     /// The shortcut cannot be represented by the global hotkey library.
-    #[error("invalid shortcut `{shortcut}`: {reason}")]
+    #[error("недопустимое сочетание `{shortcut}`: {reason}")]
     Invalid {
         /// User-provided shortcut.
         shortcut: String,
@@ -455,7 +455,7 @@ pub enum ShortcutError {
 pub enum ConfigValidationError {
     /// The settings were written by an unsupported schema version.
     #[error(
-        "configuration schema {found} is not supported; this release supports schema {supported}"
+        "версия настроек {found} не поддерживается; эта версия приложения работает с версией {supported}"
     )]
     UnsupportedConfigVersion {
         /// Schema found in the settings file.
@@ -464,7 +464,7 @@ pub enum ConfigValidationError {
         supported: u32,
     },
     /// A capture shortcut could not be parsed.
-    #[error("invalid {binding} shortcut `{shortcut}`: {reason}")]
+    #[error("недопустимое сочетание для режима «{binding}» `{shortcut}`: {reason}")]
     InvalidShortcut {
         /// Binding containing the invalid value.
         binding: ShortcutBinding,
@@ -474,22 +474,24 @@ pub enum ConfigValidationError {
         reason: String,
     },
     /// Both capture actions would be triggered by the same key combination.
-    #[error("fullscreen and region shortcuts must differ (both are `{shortcut}`)")]
+    #[error(
+        "сочетания для всего экрана и выбора области должны отличаться (сейчас оба `{shortcut}`)"
+    )]
     DuplicateShortcuts {
         /// Canonical duplicated shortcut.
         shortcut: String,
     },
     /// JPEG quality falls outside the encoder's supported user range.
-    #[error("JPEG quality must be between 1 and 100, got {0}")]
+    #[error("качество JPEG должно быть от 1 до 100, указано {0}")]
     InvalidJpegQuality(u8),
     /// No directory was configured for immediate captures.
-    #[error("autosave directory must not be empty")]
+    #[error("папка автосохранения не может быть пустой")]
     EmptyAutosaveDirectory,
     /// The configured autosave destination is an existing regular file.
-    #[error("autosave directory points to an existing file: `{}`", .0.display())]
+    #[error("вместо папки автосохранения указан существующий файл: `{}`", .0.display())]
     AutosaveDirectoryIsFile(PathBuf),
     /// The persisted editor width does not index the fixed width table.
-    #[error("editor stroke-width index must be between 0 and 3, got {0}")]
+    #[error("номер толщины линии должен быть от 0 до 3, указано {0}")]
     InvalidEditorStrokeWidth(u8),
 }
 
@@ -497,10 +499,10 @@ pub enum ConfigValidationError {
 #[derive(Debug, Error)]
 pub enum ConfigError {
     /// No per-user project directory is available on this system.
-    #[error("could not determine the per-user Rustshot configuration directory")]
+    #[error("не удалось определить папку настроек Rustshot для этого пользователя")]
     ConfigurationDirectoryUnavailable,
     /// A filesystem operation failed.
-    #[error("failed to {operation} at `{}`: {source}", path.display())]
+    #[error("не удалось {operation} `{}`: {source}", path.display())]
     Io {
         /// Operation that failed.
         operation: &'static str,
@@ -511,7 +513,7 @@ pub enum ConfigError {
         source: io::Error,
     },
     /// TOML could not be decoded into settings.
-    #[error("failed to parse configuration at `{}`: {source}", path.display())]
+    #[error("не удалось разобрать файл настроек `{}`: {source}", path.display())]
     Deserialize {
         /// Configuration file path.
         path: PathBuf,
@@ -520,7 +522,7 @@ pub enum ConfigError {
         source: toml::de::Error,
     },
     /// Settings could not be encoded as TOML.
-    #[error("failed to serialize configuration: {0}")]
+    #[error("не удалось подготовить настройки к записи: {0}")]
     Serialize(#[source] toml::ser::Error),
     /// Settings violate a semantic invariant.
     #[error(transparent)]
@@ -581,7 +583,7 @@ fn create_temporary_file(destination: &Path) -> Result<(PathBuf, fs::File), Conf
             Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {}
             Err(source) => {
                 return Err(ConfigError::Io {
-                    operation: "create temporary configuration",
+                    operation: "создать временный файл настроек",
                     path: temporary_path,
                     source,
                 });
@@ -590,11 +592,11 @@ fn create_temporary_file(destination: &Path) -> Result<(PathBuf, fs::File), Conf
     }
 
     Err(ConfigError::Io {
-        operation: "create a unique temporary configuration",
+        operation: "создать временный файл настроек с уникальным именем",
         path: parent.to_path_buf(),
         source: io::Error::new(
             io::ErrorKind::AlreadyExists,
-            "temporary configuration filename attempts exhausted",
+            "исчерпаны попытки подобрать имя временного файла настроек",
         ),
     })
 }
@@ -656,7 +658,7 @@ mod tests {
         let error = Shortcut::new("control+definitely-not-a-key")
             .expect_err("unknown key should be rejected");
 
-        assert!(error.to_string().contains("invalid shortcut"));
+        assert!(error.to_string().contains("недопустимое сочетание"));
     }
 
     #[test]

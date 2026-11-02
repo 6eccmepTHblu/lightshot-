@@ -240,8 +240,8 @@ pub fn run_settings_dialog(
         window_handle: window_handle.clone(),
     };
     // SAFETY: a null module name returns the module containing this executable.
-    let module = unsafe { GetModuleHandleW(None) }
-        .context("could not locate Rustshot's settings resources")?;
+    let module =
+        unsafe { GetModuleHandleW(None) }.context("не удалось найти ресурсы настроек Rustshot")?;
     let template = PCWSTR(IDD_SETTINGS as *const u16);
     let state_pointer = (&raw mut state).cast::<()>() as isize;
 
@@ -259,10 +259,10 @@ pub fn run_settings_dialog(
     window_handle.detach();
 
     if dialog_result == -1 {
-        return Err(WindowsError::from_thread()).context("Windows could not create settings");
+        return Err(WindowsError::from_thread()).context("Windows не смогла создать окно настроек");
     }
     if dialog_result == DIALOG_PANIC_RESULT {
-        bail!("the native settings window stopped after an unexpected error");
+        bail!("окно настроек остановилось из-за непредвиденной ошибки");
     }
     if let Some(error) = state.fatal_error {
         bail!(error);
@@ -353,7 +353,7 @@ unsafe fn settings_dialog_proc_inner(
                 IDCANCEL => request_cancel(hwnd, state),
                 IDC_BROWSE_DIRECTORY => {
                     if let Err(error) = browse_for_directory(hwnd) {
-                        show_native_error(hwnd, "Could not choose a folder", &format!("{error:#}"));
+                        show_native_error(hwnd, "Не удалось выбрать папку", &format!("{error:#}"));
                     }
                     1
                 }
@@ -361,7 +361,7 @@ unsafe fn settings_dialog_proc_inner(
                     if let Err(error) = apply_config_to_controls(hwnd, &Config::default()) {
                         show_native_error(
                             hwnd,
-                            "Could not restore defaults",
+                            "Не удалось восстановить значения по умолчанию",
                             &format!("{error:#}"),
                         );
                     }
@@ -371,7 +371,7 @@ unsafe fn settings_dialog_proc_inner(
                     if let Err(error) = normalize_hidden_quality(hwnd)
                         .and_then(|()| update_codec_control_state(hwnd))
                     {
-                        show_native_error(hwnd, "Settings UI failed", &format!("{error:#}"));
+                        show_native_error(hwnd, "Ошибка окна настроек", &format!("{error:#}"));
                     }
                     1
                 }
@@ -400,14 +400,14 @@ unsafe fn submit_settings(hwnd: HWND, state: *mut DialogState) -> isize {
     let values = match read_settings_values(hwnd, &(*state).initial_config) {
         Ok(values) => values,
         Err(error) => {
-            show_native_error(hwnd, "Invalid settings", &format!("{error:#}"));
+            show_native_error(hwnd, "Недопустимые настройки", &format!("{error:#}"));
             return 1;
         }
     };
     let candidate = match values.into_config() {
         Ok(candidate) => candidate,
         Err(error) => {
-            show_native_error(hwnd, "Invalid settings", &error.to_string());
+            show_native_error(hwnd, "Недопустимые настройки", &error.to_string());
             let _ = focus_control(hwnd, error.control_id);
             return 1;
         }
@@ -440,7 +440,7 @@ unsafe fn handle_apply_result(hwnd: HWND, state: *mut DialogState) -> isize {
         Ok(()) => {
             let _ = EndDialog(hwnd, IDOK as isize);
         }
-        Err(error) => show_native_error(hwnd, "Could not save settings", &error),
+        Err(error) => show_native_error(hwnd, "Не удалось сохранить настройки", &error),
     }
     1
 }
@@ -631,7 +631,7 @@ unsafe fn record_shortcut_key_with_modifiers(
             let _ = set_text(
                 dialog,
                 IDC_SETTINGS_STATUS,
-                "That key cannot be used as a shortcut.",
+                "Эту клавишу нельзя использовать в сочетании.",
             );
         }
     }
@@ -642,7 +642,7 @@ fn install_shortcut_recorder(dialog: HWND, control_id: i32) -> Result<()> {
     // SAFETY: the dialog owns this edit for the whole subclass lifetime. The
     // child removes the subclass during WM_NCDESTROY.
     let edit = unsafe { GetDlgItem(Some(dialog), control_id) }
-        .with_context(|| format!("shortcut control {control_id} is missing"))?;
+        .with_context(|| format!("поле сочетания {control_id} не найдено"))?;
     let state = Box::new(ShortcutRecorderState {
         dialog: hwnd_to_isize(dialog),
         control_id,
@@ -660,7 +660,7 @@ fn install_shortcut_recorder(dialog: HWND, control_id: i32) -> Result<()> {
     if !installed.as_bool() {
         // SAFETY: the subclass did not take ownership, so reclaim it here.
         drop(unsafe { Box::from_raw(reference_data as *mut ShortcutRecorderState) });
-        bail!("Windows could not initialize shortcut control {control_id}");
+        bail!("Windows не смогла подготовить поле сочетания {control_id}");
     }
     Ok(())
 }
@@ -796,16 +796,16 @@ fn virtual_key_name(virtual_key: u32, extended: bool) -> Option<String> {
 }
 
 fn initialize_controls(hwnd: HWND, config: &Config) -> Result<()> {
-    add_combo_items(hwnd, IDC_IMAGE_FORMAT, &["PNG (lossless)", "JPEG"])?;
+    add_combo_items(hwnd, IDC_IMAGE_FORMAT, &["PNG (без потерь)", "JPEG"])?;
     add_combo_items(
         hwnd,
         IDC_PNG_COMPRESSION,
-        &["Fast", "Default", "Best compression"],
+        &["Быстрое", "Обычное", "Максимальное"],
     )?;
     add_combo_items(
         hwnd,
         IDC_MONITOR_SCOPE,
-        &["Monitor under cursor", "All displays"],
+        &["Монитор под курсором", "Все мониторы"],
     )?;
     install_shortcut_recorder(hwnd, IDC_FULLSCREEN_SHORTCUT)?;
     install_shortcut_recorder(hwnd, IDC_REGION_SHORTCUT)?;
@@ -833,7 +833,7 @@ fn apply_config_to_controls(hwnd: HWND, config: &Config) -> Result<()> {
             },
         )
     }
-    .context("could not initialize cursor inclusion")?;
+    .context("не удалось подготовить настройку курсора")?;
     for (control_id, checked) in [
         (IDC_REGION_AUTO_COPY, values.region_auto_copy),
         (IDC_REGION_AUTOSAVE, values.region_autosave),
@@ -845,21 +845,22 @@ fn apply_config_to_controls(hwnd: HWND, config: &Config) -> Result<()> {
                 if checked { BST_CHECKED } else { BST_UNCHECKED },
             )
         }
-        .with_context(|| format!("could not initialize capture option {control_id}"))?;
+        .with_context(|| format!("не удалось подготовить настройку снимка {control_id}"))?;
     }
     update_codec_control_state(hwnd)
 }
 
 fn read_settings_values(hwnd: HWND, current: &Config) -> Result<SettingsValues> {
     let fullscreen_shortcut = read_text(hwnd, IDC_FULLSCREEN_SHORTCUT)
-        .context("could not read the full-screen shortcut")?;
-    let region_shortcut =
-        read_text(hwnd, IDC_REGION_SHORTCUT).context("could not read the region shortcut")?;
+        .context("не удалось прочитать сочетание для всего экрана")?;
+    let region_shortcut = read_text(hwnd, IDC_REGION_SHORTCUT)
+        .context("не удалось прочитать сочетание для выбора области")?;
     let autosave_directory = PathBuf::from(OsString::from_wide(&read_text_wide(
         hwnd,
         IDC_AUTOSAVE_DIRECTORY,
     )?));
-    let jpeg_quality = read_text(hwnd, IDC_JPEG_QUALITY).context("could not read JPEG quality")?;
+    let jpeg_quality =
+        read_text(hwnd, IDC_JPEG_QUALITY).context("не удалось прочитать качество JPEG")?;
     // SAFETY: the checkbox belongs to the live settings dialog.
     let include_cursor = unsafe { IsDlgButtonChecked(hwnd, IDC_INCLUDE_CURSOR) } == BST_CHECKED.0;
     let region_auto_copy =
@@ -933,19 +934,19 @@ impl SettingsValues {
         let fullscreen_shortcut = Shortcut::new(&self.fullscreen_shortcut).map_err(|error| {
             SettingsInputError::new(
                 IDC_FULLSCREEN_SHORTCUT,
-                format!("Full-screen shortcut is invalid.\n\n{error}"),
+                format!("Недопустимое сочетание для всего экрана.\n\n{error}"),
             )
         })?;
         let region_shortcut = Shortcut::new(&self.region_shortcut).map_err(|error| {
             SettingsInputError::new(
                 IDC_REGION_SHORTCUT,
-                format!("Region shortcut is invalid.\n\n{error}"),
+                format!("Недопустимое сочетание для выбора области.\n\n{error}"),
             )
         })?;
         let jpeg_quality = self.jpeg_quality.trim().parse::<u8>().map_err(|_| {
             SettingsInputError::new(
                 IDC_JPEG_QUALITY,
-                "JPEG quality must be a number from 1 to 100",
+                "Качество JPEG должно быть числом от 1 до 100",
             )
         })?;
         let image_format = match self.image_format_index {
@@ -954,7 +955,7 @@ impl SettingsValues {
             _ => {
                 return Err(SettingsInputError::new(
                     IDC_IMAGE_FORMAT,
-                    "Image format selection is invalid",
+                    "Выбран недопустимый формат изображения",
                 ));
             }
         };
@@ -965,7 +966,7 @@ impl SettingsValues {
             _ => {
                 return Err(SettingsInputError::new(
                     IDC_PNG_COMPRESSION,
-                    "PNG compression selection is invalid",
+                    "Выбрано недопустимое сжатие PNG",
                 ));
             }
         };
@@ -975,7 +976,7 @@ impl SettingsValues {
             _ => {
                 return Err(SettingsInputError::new(
                     IDC_MONITOR_SCOPE,
-                    "Full-screen scope selection is invalid",
+                    "Выбрана недопустимая область снимка экрана",
                 ));
             }
         };
@@ -1010,7 +1011,7 @@ impl SettingsValues {
                 | ConfigValidationError::AutosaveDirectoryIsFile(_) => IDC_AUTOSAVE_DIRECTORY,
                 ConfigValidationError::InvalidEditorStrokeWidth(_) => IDC_RESTORE_DEFAULTS,
             };
-            SettingsInputError::new(control_id, format!("Settings are invalid.\n\n{error}"))
+            SettingsInputError::new(control_id, format!("Настройки недопустимы.\n\n{error}"))
         })?;
         Ok(config)
     }
@@ -1119,14 +1120,18 @@ unsafe fn set_pending(hwnd: HWND, pending: bool) {
     let _ = set_text(
         hwnd,
         IDC_SETTINGS_STATUS,
-        if pending { "Saving settings..." } else { "" },
+        if pending {
+            "Сохранение настроек..."
+        } else {
+            ""
+        },
     );
 }
 
 fn set_control_enabled(hwnd: HWND, control_id: i32, enabled: bool) -> Result<()> {
     // SAFETY: the requested child HWND is used only for EnableWindow.
     let control = unsafe { GetDlgItem(Some(hwnd), control_id) }
-        .with_context(|| format!("settings control {control_id} is missing"))?;
+        .with_context(|| format!("элемент настроек {control_id} не найден"))?;
     // EnableWindow returns the previous enabled state, not success/failure.
     let _ = unsafe { EnableWindow(control, enabled) };
     Ok(())
@@ -1136,7 +1141,7 @@ fn focus_control(hwnd: HWND, control_id: i32) -> Result<()> {
     // SAFETY: the requested child belongs to the live settings dialog. EM_SETSEL
     // is ignored by non-edit controls after they receive focus.
     let control = unsafe { GetDlgItem(Some(hwnd), control_id) }
-        .with_context(|| format!("settings control {control_id} is missing"))?;
+        .with_context(|| format!("элемент настроек {control_id} не найден"))?;
     let _ = unsafe { SetFocus(Some(control)) };
     let _ = unsafe { SendMessageW(control, EM_SETSEL, Some(WPARAM(0)), Some(LPARAM(-1))) };
     Ok(())
@@ -1150,7 +1155,7 @@ fn browse_for_directory(hwnd: HWND) -> Result<()> {
     let parent = DialogParent(hwnd);
     let mut picker = FileDialog::new()
         .set_parent(&parent)
-        .set_title("Choose Rustshot autosave folder");
+        .set_title("Выберите папку автосохранения Rustshot");
     if current.is_dir() {
         picker = picker.set_directory(&current);
     }
@@ -1191,7 +1196,7 @@ fn add_combo_items(hwnd: HWND, control_id: i32, items: &[&str]) -> Result<()> {
             )
         };
         if result.0 < 0 {
-            bail!("could not populate settings control {control_id}");
+            bail!("не удалось заполнить элемент настроек {control_id}");
         }
     }
     Ok(())
@@ -1202,7 +1207,7 @@ fn combo_selection(hwnd: HWND, control_id: i32) -> Result<usize> {
     let result =
         unsafe { SendDlgItemMessageW(hwnd, control_id, CB_GETCURSEL, WPARAM(0), LPARAM(0)) };
     usize::try_from(result.0)
-        .with_context(|| format!("settings control {control_id} has no selection"))
+        .with_context(|| format!("в элементе настроек {control_id} ничего не выбрано"))
 }
 
 fn set_combo_selection(hwnd: HWND, control_id: i32, index: usize) -> Result<()> {
@@ -1210,28 +1215,28 @@ fn set_combo_selection(hwnd: HWND, control_id: i32, index: usize) -> Result<()> 
     let result =
         unsafe { SendDlgItemMessageW(hwnd, control_id, CB_SETCURSEL, WPARAM(index), LPARAM(0)) };
     if result.0 < 0 {
-        bail!("could not select settings control {control_id}");
+        bail!("не удалось выбрать значение в элементе настроек {control_id}");
     }
     Ok(())
 }
 
 fn read_text(hwnd: HWND, control_id: i32) -> Result<String> {
     String::from_utf16(&read_text_wide(hwnd, control_id)?)
-        .with_context(|| format!("settings control {control_id} contains invalid text"))
+        .with_context(|| format!("в элементе настроек {control_id} недопустимый текст"))
 }
 
 fn read_text_wide(hwnd: HWND, control_id: i32) -> Result<Vec<u16>> {
     // SAFETY: the child HWND remains owned by the live dialog for both calls.
     let control = unsafe { GetDlgItem(Some(hwnd), control_id) }
-        .with_context(|| format!("settings control {control_id} is missing"))?;
+        .with_context(|| format!("элемент настроек {control_id} не найден"))?;
     let length = unsafe { GetWindowTextLengthW(control) };
     let capacity = usize::try_from(length)
-        .context("settings text is too long")?
+        .context("текст настройки слишком длинный")?
         .checked_add(1)
-        .context("settings text length overflow")?;
+        .context("переполнение длины текста настройки")?;
     let mut buffer = vec![0_u16; capacity];
     let copied = unsafe { GetWindowTextW(control, &mut buffer) };
-    let copied = usize::try_from(copied).context("settings text length is invalid")?;
+    let copied = usize::try_from(copied).context("неверная длина текста настройки")?;
     buffer.truncate(copied);
     Ok(buffer)
 }
@@ -1248,12 +1253,12 @@ fn set_text_wide(hwnd: HWND, control_id: i32, mut value: Vec<u16>) -> Result<()>
     value.push(0);
     // SAFETY: `value` is terminated and alive for the synchronous copy.
     unsafe { SetDlgItemTextW(hwnd, control_id, PCWSTR(value.as_ptr())) }
-        .with_context(|| format!("could not update settings control {control_id}"))
+        .with_context(|| format!("не удалось обновить элемент настроек {control_id}"))
 }
 
 unsafe fn confirm_discard(hwnd: HWND) -> bool {
-    let text = wide_string("Discard unsaved settings changes?");
-    let title = wide_string("Rustshot Settings");
+    let text = wide_string("Отменить несохранённые изменения настроек?");
+    let title = wide_string("Настройки Rustshot");
     MessageBoxW(
         Some(hwnd),
         PCWSTR(text.as_ptr()),

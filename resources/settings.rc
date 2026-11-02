@@ -1,3 +1,5 @@
+#pragma code_page(65001)
+
 // Keep this resource self-contained. Some Rust-only Windows toolchains provide
 // rc.exe without configuring the Windows SDK include directory for windows.h.
 #define DS_SETFONT        0x0040L
@@ -38,38 +40,38 @@
 IDD_SETTINGS DIALOGEX 0, 0, 430, 335
 STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
 EXSTYLE WS_EX_APPWINDOW
-CAPTION "Rustshot Settings"
+CAPTION "Настройки Rustshot"
 FONT 9, "Segoe UI"
 BEGIN
-    GROUPBOX        "Keyboard shortcuts", -1, 8, 7, 414, 77
-    LTEXT           "Full-screen &autosave:", -1, 18, 24, 102, 10
+    GROUPBOX        "Горячие клавиши", -1, 8, 7, 414, 77
+    LTEXT           "Снимок всего &экрана:", -1, 18, 24, 102, 10
     EDITTEXT        IDC_FULLSCREEN_SHORTCUT, 126, 21, 282, 14, ES_AUTOHSCROLL | ES_READONLY | WS_TABSTOP
-    LTEXT           "&Region selection:", -1, 18, 48, 102, 10
+    LTEXT           "Выбор &области:", -1, 18, 48, 102, 10
     EDITTEXT        IDC_REGION_SHORTCUT, 126, 45, 282, 14, ES_AUTOHSCROLL | ES_READONLY | WS_TABSTOP
-    LTEXT           "Hold a chord such as Ctrl+Shift+Backspace, then release. Tab moves between controls.", -1, 126, 66, 282, 10
+    LTEXT           "Зажмите сочетание, например Ctrl+Shift+Backspace, и отпустите. Tab — далее.", -1, 126, 66, 282, 10
 
-    GROUPBOX        "Saving and image quality", -1, 8, 90, 414, 113
-    LTEXT           "Autosave &folder:", -1, 18, 108, 102, 10
+    GROUPBOX        "Сохранение и качество", -1, 8, 90, 414, 113
+    LTEXT           "&Папка автосохранения:", -1, 18, 108, 102, 10
     EDITTEXT        IDC_AUTOSAVE_DIRECTORY, 126, 105, 221, 14, ES_AUTOHSCROLL | WS_TABSTOP
-    PUSHBUTTON      "&Browse...", IDC_BROWSE_DIRECTORY, 353, 104, 55, 16, WS_TABSTOP
-    LTEXT           "&Image format:", -1, 18, 132, 102, 10
+    PUSHBUTTON      "О&бзор...", IDC_BROWSE_DIRECTORY, 353, 104, 55, 16, WS_TABSTOP
+    LTEXT           "&Формат изображения:", -1, 18, 132, 102, 10
     COMBOBOX        IDC_IMAGE_FORMAT, 126, 129, 104, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "&JPEG quality (1-100):", IDC_JPEG_QUALITY_LABEL, 245, 132, 104, 10
+    LTEXT           "Качество &JPEG (1–100):", IDC_JPEG_QUALITY_LABEL, 245, 132, 104, 10
     EDITTEXT        IDC_JPEG_QUALITY, 353, 129, 55, 14, ES_NUMBER | ES_AUTOHSCROLL | WS_TABSTOP
-    LTEXT           "&PNG compression:", IDC_PNG_COMPRESSION_LABEL, 18, 158, 102, 10
+    LTEXT           "Сжатие &PNG:", IDC_PNG_COMPRESSION_LABEL, 18, 158, 102, 10
     COMBOBOX        IDC_PNG_COMPRESSION, 126, 155, 104, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "PNG is lossless; compression changes encoding speed and file size.", IDC_PNG_HELP, 126, 181, 282, 10
+    LTEXT           "PNG сохраняет без потерь: сжатие влияет на скорость и размер файла.", IDC_PNG_HELP, 126, 181, 282, 10
 
-    GROUPBOX        "Capture", -1, 8, 209, 414, 88
-    LTEXT           "Full-screen sc&ope:", -1, 18, 228, 102, 10
+    GROUPBOX        "Снимок", -1, 8, 209, 414, 88
+    LTEXT           "&Весь экран — это:", -1, 18, 228, 102, 10
     COMBOBOX        IDC_MONITOR_SCOPE, 126, 225, 143, 70, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    CONTROL         "Include mouse c&ursor", IDC_INCLUDE_CURSOR, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 285, 226, 123, 12
-    CONTROL         "Automatically &copy selected region", IDC_REGION_AUTO_COPY, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 18, 252, 190, 12
-    CONTROL         "Automatically &save selected region", IDC_REGION_AUTOSAVE, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 218, 252, 190, 12
-    LTEXT           "Either automatic action finishes immediately after selection and skips the editor.", -1, 18, 277, 390, 10
+    CONTROL         "Показывать &курсор мыши", IDC_INCLUDE_CURSOR, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 285, 226, 123, 12
+    CONTROL         "Сразу &копировать выделенную область", IDC_REGION_AUTO_COPY, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 18, 252, 190, 12
+    CONTROL         "Сразу &сохранять выделенную область", IDC_REGION_AUTOSAVE, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 218, 252, 190, 12
+    LTEXT           "С любым из этих действий снимок завершается сразу после выделения, без редактора.", -1, 18, 277, 390, 10
 
-    PUSHBUTTON      "Restore &defaults", IDC_RESTORE_DEFAULTS, 8, 309, 82, 18, WS_TABSTOP
+    PUSHBUTTON      "По &умолчанию", IDC_RESTORE_DEFAULTS, 8, 309, 82, 18, WS_TABSTOP
     LTEXT           "", IDC_SETTINGS_STATUS, 99, 313, 188, 10
-    DEFPUSHBUTTON   "&Save", IDOK, 297, 309, 58, 18, WS_TABSTOP
-    PUSHBUTTON      "&Cancel", IDCANCEL, 364, 309, 58, 18, WS_TABSTOP
+    DEFPUSHBUTTON   "Со&хранить", IDOK, 297, 309, 58, 18, WS_TABSTOP
+    PUSHBUTTON      "Отмена", IDCANCEL, 364, 309, 58, 18, WS_TABSTOP
 END

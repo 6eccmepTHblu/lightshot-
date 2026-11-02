@@ -90,7 +90,7 @@ enum AppEvent {
 pub fn run() -> Result<()> {
     let event_loop = EventLoop::<AppEvent>::with_user_event()
         .build()
-        .context("could not create the Windows event loop")?;
+        .context("не удалось создать цикл событий Windows")?;
     wire_event_sources(&event_loop.create_proxy());
 
     let config = load_initial_config();
@@ -100,7 +100,7 @@ pub fn run() -> Result<()> {
     let mut app = RustshotApp::new(event_loop.create_proxy(), config, open_settings_on_start);
     event_loop
         .run_app(&mut app)
-        .context("Rustshot's event loop stopped unexpectedly")
+        .context("цикл событий Rustshot неожиданно остановился")
 }
 
 fn wire_event_sources(proxy: &EventLoopProxy<AppEvent>) {
@@ -125,16 +125,16 @@ fn load_initial_config() -> Config {
         Ok(config) => {
             if config_path().is_ok_and(|path| !path.exists()) {
                 if let Err(error) = config.save() {
-                    show_error("Could not create settings", &error.to_string());
+                    show_error("Не удалось создать настройки", &error.to_string());
                 }
             }
             config
         }
         Err(error) => {
             show_error(
-                "Could not load settings",
+                "Не удалось загрузить настройки",
                 &format!(
-                    "{error}\n\nRustshot will use safe defaults. Open Settings to repair the configuration."
+                    "{error}\n\nRustshot будет использовать значения по умолчанию. Откройте настройки, чтобы исправить их."
                 ),
             );
             Config::default()
@@ -189,15 +189,15 @@ impl RustshotApp {
         }
         self.config.print_screen_hint_shown = true;
         if let Err(error) = self.config.save() {
-            show_error("Could not save settings", &error.to_string());
+            show_error("Не удалось сохранить настройки", &error.to_string());
         }
         let answer = MessageDialog::new()
             .set_level(MessageLevel::Info)
-            .set_title("Print Screen may open Windows screen capture")
+            .set_title("Print Screen может открывать захват экрана Windows")
             .set_description(
-                "If Print Screen opens the Windows capture bar instead of RustShot, turn off \
-                 \"Use the Print Screen key to open screen capture\" in Windows Settings.\n\n\
-                 Open that page now?",
+                "Если Print Screen открывает панель захвата Windows, а не Rustshot, отключите в параметрах \
+                 Windows использование клавиши Print Screen для открытия захвата экрана.\n\n\
+                 Открыть эту страницу сейчас?",
             )
             .set_buttons(MessageButtons::YesNo)
             .show();
@@ -206,7 +206,7 @@ impl RustshotApp {
                 .arg("ms-settings:easeofaccess-keyboard")
                 .spawn()
             {
-                show_error("Could not open Windows Settings", &error.to_string());
+                show_error("Не удалось открыть параметры Windows", &error.to_string());
             }
         }
     }
@@ -215,16 +215,16 @@ impl RustshotApp {
         if self.tray.is_none() {
             match build_tray_icon() {
                 Ok(tray) => self.tray = Some(tray),
-                Err(error) => show_error("Could not create tray icon", &error.to_string()),
+                Err(error) => show_error("Не удалось создать значок в трее", &error.to_string()),
             }
         }
         if self.hotkeys.is_none() {
             match RegisteredHotkeys::new(&self.config) {
                 Ok(hotkeys) => self.hotkeys = Some(hotkeys),
                 Err(error) => show_error(
-                    "Could not register shortcuts",
+                    "Не удалось зарегистрировать горячие клавиши",
                     &format!(
-                        "{error}\n\nOpen Rustshot settings from the tray and choose different shortcuts."
+                        "{error}\n\nОткройте настройки Rustshot в трее и выберите другие сочетания клавиш."
                     ),
                 ),
             }
@@ -247,7 +247,7 @@ impl RustshotApp {
             match current_cursor_position() {
                 Ok(position) => Some(position),
                 Err(error) => {
-                    show_error("Screenshot failed", &error.to_string());
+                    show_error("Не удалось сделать снимок", &error.to_string());
                     return;
                 }
             }
@@ -289,7 +289,7 @@ impl RustshotApp {
             Ok(frame) => frame,
             Err(error) => {
                 self.busy = false;
-                show_error("Screenshot failed", &error);
+                show_error("Не удалось сделать снимок", &error);
                 return;
             }
         };
@@ -308,7 +308,7 @@ impl RustshotApp {
                 Ok(overlay) => self.overlay = Some(overlay),
                 Err(error) => {
                     self.busy = false;
-                    show_error("Could not open the region editor", &error.to_string());
+                    show_error("Не удалось открыть редактор", &error.to_string());
                 }
             },
             CaptureKind::Fullscreen => {
@@ -370,16 +370,16 @@ impl RustshotApp {
         let extension = default_options.format.extension();
         let file_name = format!("{}.{}", screenshot_stem(), extension);
         let dialog = FileDialog::new()
-            .set_title("Save Rustshot screenshot")
+            .set_title("Сохранить снимок Rustshot")
             .set_directory(&self.config.autosave_directory)
             .set_file_name(file_name);
         let dialog = match default_options.format {
             OutputFormat::Png => dialog
-                .add_filter("PNG image", &["png"])
-                .add_filter("JPEG image", &["jpg", "jpeg"]),
+                .add_filter("Изображение PNG", &["png"])
+                .add_filter("Изображение JPEG", &["jpg", "jpeg"]),
             OutputFormat::Jpeg => dialog
-                .add_filter("JPEG image", &["jpg", "jpeg"])
-                .add_filter("PNG image", &["png"]),
+                .add_filter("Изображение JPEG", &["jpg", "jpeg"])
+                .add_filter("Изображение PNG", &["png"]),
         };
         let selected = dialog.save_file();
 
@@ -400,9 +400,9 @@ impl RustshotApp {
             && replace_existing
             && MessageDialog::new()
                 .set_level(MessageLevel::Warning)
-                .set_title("Replace existing screenshot?")
+                .set_title("Заменить существующий снимок?")
                 .set_description(format!(
-                    "Rustshot will encode this image as .{}.\n\nReplace `{}`?",
+                    "Rustshot сохранит изображение в формате .{}.\n\nЗаменить `{}`?",
                     selected_format.extension(),
                     destination.display()
                 ))
@@ -442,7 +442,7 @@ impl RustshotApp {
                 let result = self
                     .overlay
                     .as_ref()
-                    .context("region editor window no longer exists")
+                    .context("окно редактора больше не существует")
                     .and_then(|overlay| overlay.owner_hwnd())
                     .and_then(|owner| copy_to_clipboard_with_owner(&frame, owner, allow_history));
                 match result {
@@ -452,7 +452,7 @@ impl RustshotApp {
                         self.busy = false;
                     }
                     Err(error) => {
-                        show_error("Could not copy screenshot", &error.to_string());
+                        show_error("Не удалось скопировать снимок", &error.to_string());
                         self.set_overlay_visible(true);
                     }
                 }
@@ -464,7 +464,7 @@ impl RustshotApp {
             OverlayOutcome::Error(error) => {
                 self.overlay = None;
                 self.busy = false;
-                show_error("Region editor failed", &error);
+                show_error("Ошибка редактора", &error);
             }
         }
     }
@@ -475,11 +475,11 @@ impl RustshotApp {
             let result = self
                 .overlay
                 .as_ref()
-                .context("region selection window no longer exists")
+                .context("окно выбора области больше не существует")
                 .and_then(|overlay| overlay.owner_hwnd())
                 .and_then(|owner| copy_to_clipboard_with_owner(&frame, owner, allow_history));
             if let Err(error) = result {
-                show_error("Could not copy screenshot", &error.to_string());
+                show_error("Не удалось скопировать снимок", &error.to_string());
                 return;
             }
         }
@@ -508,7 +508,10 @@ impl RustshotApp {
         self.config.editor_color = preferences.color;
         self.config.editor_stroke_width = preferences.stroke_width;
         if let Err(error) = self.config.save() {
-            show_error("Could not remember editor preferences", &error.to_string());
+            show_error(
+                "Не удалось запомнить настройки редактора",
+                &error.to_string(),
+            );
         }
     }
 
@@ -524,7 +527,7 @@ impl RustshotApp {
             MENU_CAPTURE_FULLSCREEN => self.start_capture(CaptureKind::Fullscreen),
             MENU_OPEN_SCREENSHOTS => {
                 if let Err(error) = open_path(&self.config.autosave_directory) {
-                    show_error("Could not open screenshot folder", &error.to_string());
+                    show_error("Не удалось открыть папку со снимками", &error.to_string());
                 }
             }
             MENU_OPEN_SETTINGS => self.open_settings_window(),
@@ -532,25 +535,31 @@ impl RustshotApp {
                 Ok(report) => {
                     let directory = report.parent().unwrap_or_else(|| Path::new("."));
                     if let Err(error) = open_path(directory) {
-                        show_error("Could not open diagnostics", &error.to_string());
+                        show_error(
+                            "Не удалось открыть диагностический отчёт",
+                            &error.to_string(),
+                        );
                     } else {
                         MessageDialog::new()
                             .set_level(MessageLevel::Info)
-                            .set_title("Diagnostic report created")
+                            .set_title("Диагностический отчёт создан")
                             .set_description(format!(
-                                "Rustshot created `{}`. Review it before attaching it to a support request.",
+                                "Rustshot создал файл `{}`. Просмотрите его, прежде чем кому-либо отправлять.",
                                 report.display()
                             ))
                             .show();
                     }
                 }
-                Err(error) => show_error("Could not create diagnostics", &error.to_string()),
+                Err(error) => show_error(
+                    "Не удалось создать диагностический отчёт",
+                    &error.to_string(),
+                ),
             },
             MENU_QUIT => {
                 if self.busy || self.settings_window.is_some() {
                     show_error(
-                        "Rustshot is busy",
-                        "Finish or cancel the current capture, settings, save, or print operation before quitting.",
+                        "Rustshot занят",
+                        "Перед выходом завершите или отмените текущий снимок, настройку, сохранение или печать.",
                     );
                 } else {
                     event_loop.exit();
@@ -567,8 +576,8 @@ impl RustshotApp {
         }
         if self.busy || self.overlay.is_some() {
             show_error(
-                "Rustshot is busy",
-                "Finish or cancel the current capture, save, or print operation before opening settings.",
+                "Rustshot занят",
+                "Перед открытием настроек завершите или отмените текущий снимок, сохранение или печать.",
             );
             return;
         }
@@ -595,7 +604,7 @@ impl RustshotApp {
                         }) {
                             if let AppEvent::SettingsApply { responder, .. } = error.0 {
                                 responder.finish(Err(
-                                    "Rustshot's event loop is no longer available".to_owned(),
+                                    "цикл событий Rustshot больше не доступен".to_owned()
                                 ));
                             }
                         }
@@ -606,8 +615,8 @@ impl RustshotApp {
         if let Err(error) = spawn_result {
             self.settings_window = None;
             show_error(
-                "Could not open settings",
-                &format!("Could not start the settings window: {error}"),
+                "Не удалось открыть настройки",
+                &format!("Не удалось запустить окно настроек: {error}"),
             );
         }
     }
@@ -641,9 +650,9 @@ impl RustshotApp {
             }
             Err(recreate_error) => match replacement_error {
                 Some(replacement_error) => Err(anyhow::anyhow!(
-                    "shortcut rollback failed ({replacement_error}); recreating the previous shortcuts also failed ({recreate_error})"
+                    "не удалось откатить сочетания клавиш ({replacement_error}); восстановить прежние тоже не удалось ({recreate_error})"
                 )),
-                None => Err(recreate_error).context("could not recreate the previous shortcuts"),
+                None => Err(recreate_error).context("не удалось восстановить прежние сочетания клавиш"),
             },
         }
     }
@@ -686,16 +695,16 @@ fn commit_settings(
     previous_config: &Config,
     new_config: Config,
 ) -> Result<Config> {
-    new_config.validate().context("settings are invalid")?;
+    new_config.validate().context("настройки недопустимы")?;
     let previous_shortcuts_registered = backend.shortcuts_registered();
 
     if let Err(apply_error) = backend.activate_shortcuts(&new_config) {
         return match backend.restore_shortcuts(previous_config, previous_shortcuts_registered) {
             Ok(()) => Err(apply_error).context(
-                "could not activate the new shortcuts; the previous shortcut state was restored",
+                "не удалось включить новые сочетания клавиш; прежние восстановлены",
             ),
             Err(rollback_error) => Err(anyhow::anyhow!(
-                "could not activate the new shortcuts ({apply_error}); restoring the previous shortcut state also failed ({rollback_error})"
+                "не удалось включить новые сочетания клавиш ({apply_error}); восстановить прежние тоже не удалось ({rollback_error})"
             )),
         };
     }
@@ -703,9 +712,9 @@ fn commit_settings(
     if let Err(save_error) = backend.persist_settings(&new_config) {
         return match backend.restore_shortcuts(previous_config, previous_shortcuts_registered) {
             Ok(()) => Err(save_error)
-                .context("could not save settings; the previous shortcut state was restored"),
+                .context("не удалось сохранить настройки; прежние сочетания клавиш восстановлены"),
             Err(rollback_error) => Err(anyhow::anyhow!(
-                "could not save settings ({save_error}); restoring the previous shortcut state also failed ({rollback_error})"
+                "не удалось сохранить настройки ({save_error}); восстановить прежние сочетания клавиш тоже не удалось ({rollback_error})"
             )),
         };
     }
@@ -749,7 +758,7 @@ impl ApplicationHandler<AppEvent> for RustshotApp {
                 (SaveOrigin::Autosave, Ok(_)) => self.busy = false,
                 (SaveOrigin::Autosave, Err(error)) => {
                     self.busy = false;
-                    show_error("Could not save screenshot", &error);
+                    show_error("Не удалось сохранить снимок", &error);
                 }
                 (SaveOrigin::Editor, Ok(_)) => {
                     self.remember_overlay_preferences();
@@ -757,7 +766,7 @@ impl ApplicationHandler<AppEvent> for RustshotApp {
                     self.busy = false;
                 }
                 (SaveOrigin::Editor, Err(error)) => {
-                    show_error("Could not save screenshot", &error);
+                    show_error("Не удалось сохранить снимок", &error);
                     self.set_overlay_visible(true);
                 }
             },
@@ -769,7 +778,7 @@ impl ApplicationHandler<AppEvent> for RustshotApp {
                 }
                 Ok(PrintOutcome::Cancelled) => self.set_overlay_visible(true),
                 Err(error) => {
-                    show_error("Could not print screenshot", &error);
+                    show_error("Не удалось напечатать снимок", &error);
                     self.set_overlay_visible(true);
                 }
             },
@@ -797,7 +806,7 @@ impl ApplicationHandler<AppEvent> for RustshotApp {
                 {
                     self.settings_window = None;
                     if let Err(error) = result {
-                        show_error("Settings window failed", &error);
+                        show_error("Ошибка окна настроек", &error);
                     }
                 }
             }
@@ -828,20 +837,21 @@ struct RegisteredHotkeys {
 
 impl RegisteredHotkeys {
     fn new(config: &Config) -> Result<Self> {
-        let manager = GlobalHotKeyManager::new().context("could not initialize global hotkeys")?;
+        let manager = GlobalHotKeyManager::new()
+            .context("не удалось инициализировать глобальные горячие клавиши")?;
         let fullscreen = config
             .fullscreen_shortcut
             .as_hotkey()
-            .context("invalid full-screen shortcut")?;
+            .context("недопустимое сочетание для снимка всего экрана")?;
         let region = config
             .region_shortcut
             .as_hotkey()
-            .context("invalid region shortcut")?;
+            .context("недопустимое сочетание для выбора области")?;
         manager
             .register_all(&[fullscreen, region])
             .with_context(|| {
                 format!(
-                    "Windows rejected `{}` or `{}` because another application may already use it",
+                    "Windows отклонила `{}` или `{}`: возможно, сочетание уже занято другим приложением",
                     config.fullscreen_shortcut, config.region_shortcut
                 )
             })?;
@@ -857,18 +867,18 @@ impl RegisteredHotkeys {
         let fullscreen = config
             .fullscreen_shortcut
             .as_hotkey()
-            .context("invalid full-screen shortcut")?;
+            .context("недопустимое сочетание для снимка всего экрана")?;
         let region = config
             .region_shortcut
             .as_hotkey()
-            .context("invalid region shortcut")?;
+            .context("недопустимое сочетание для выбора области")?;
         if self.registered && fullscreen == self.fullscreen && region == self.region {
             return Ok(());
         }
 
         let previous = [self.fullscreen, self.region];
-        let replacement_manager =
-            GlobalHotKeyManager::new().context("could not reinitialize global hotkeys")?;
+        let replacement_manager = GlobalHotKeyManager::new()
+            .context("не удалось повторно инициализировать глобальные горячие клавиши")?;
         let previous_manager = std::mem::replace(&mut self.manager, replacement_manager);
         // Destroying the old manager's hidden window atomically releases all
         // hotkeys associated with it, avoiding partial sequential unregisters.
@@ -885,13 +895,13 @@ impl RegisteredHotkeys {
                     self.registered = true;
                     Err(error).with_context(|| {
                         format!(
-                            "Windows rejected `{}` or `{}`",
+                            "Windows отклонила `{}` или `{}`",
                             config.fullscreen_shortcut, config.region_shortcut
                         )
                     })
                 }
                 Err(rollback_error) => Err(anyhow::anyhow!(
-                    "Windows rejected the new shortcuts ({error}) and restoring the previous shortcuts also failed ({rollback_error})"
+                    "Windows отклонила новые сочетания клавиш ({error}), и восстановить прежние тоже не удалось ({rollback_error})"
                 )),
             };
         }
@@ -905,15 +915,24 @@ impl RegisteredHotkeys {
 
 fn build_tray_icon() -> Result<TrayIcon> {
     let menu = Menu::new();
-    let region = MenuItem::with_id(MENU_CAPTURE_REGION, "Capture &region", true, None);
-    let fullscreen = MenuItem::with_id(MENU_CAPTURE_FULLSCREEN, "Capture &full screen", true, None);
-    let screenshots =
-        MenuItem::with_id(MENU_OPEN_SCREENSHOTS, "Open screenshot &folder", true, None);
-    let settings = MenuItem::with_id(MENU_OPEN_SETTINGS, "&Settings...", true, None);
-    let diagnostics = MenuItem::with_id(MENU_DIAGNOSTICS, "Create &diagnostic report", true, None);
+    let region = MenuItem::with_id(MENU_CAPTURE_REGION, "Снять &область", true, None);
+    let fullscreen = MenuItem::with_id(MENU_CAPTURE_FULLSCREEN, "Снять весь &экран", true, None);
+    let screenshots = MenuItem::with_id(
+        MENU_OPEN_SCREENSHOTS,
+        "Открыть &папку со снимками",
+        true,
+        None,
+    );
+    let settings = MenuItem::with_id(MENU_OPEN_SETTINGS, "&Настройки...", true, None);
+    let diagnostics = MenuItem::with_id(
+        MENU_DIAGNOSTICS,
+        "Создать &диагностический отчёт",
+        true,
+        None,
+    );
     let capture_separator = PredefinedMenuItem::separator();
     let quit_separator = PredefinedMenuItem::separator();
-    let quit = MenuItem::with_id(MENU_QUIT, "&Quit Rustshot", true, None);
+    let quit = MenuItem::with_id(MENU_QUIT, "&Выйти из Rustshot", true, None);
     menu.append_items(&[
         &region,
         &fullscreen,
@@ -926,11 +945,11 @@ fn build_tray_icon() -> Result<TrayIcon> {
     ])?;
 
     TrayIconBuilder::new()
-        .with_tooltip("Rustshot — click to capture a region")
+        .with_tooltip("Rustshot — нажмите, чтобы снять область")
         .with_menu(Box::new(menu))
         .with_icon(rustshot_icon()?)
         .build()
-        .context("Windows rejected the Rustshot tray icon")
+        .context("Windows отклонила значок Rustshot в трее")
 }
 
 fn rustshot_icon() -> Result<Icon> {
@@ -938,11 +957,11 @@ fn rustshot_icon() -> Result<Icon> {
         include_bytes!("../resources/rustshot-tray.png"),
         ::image::ImageFormat::Png,
     )
-    .context("the embedded RustShot tray icon is invalid")?
+    .context("встроенный значок RustShot для трея повреждён")?
     .to_rgba8();
     let (width, height) = image.dimensions();
     Icon::from_rgba(image.into_raw(), width, height)
-        .context("Windows rejected the embedded RustShot tray icon")
+        .context("Windows отклонила встроенный значок RustShot для трея")
 }
 
 fn next_autosave_path(config: &Config) -> PathBuf {
@@ -994,11 +1013,11 @@ fn output_format_from_path(path: &Path) -> Option<OutputFormat> {
 
 fn open_path(path: &Path) -> Result<()> {
     std::fs::create_dir_all(path)
-        .with_context(|| format!("could not create `{}`", path.display()))?;
+        .with_context(|| format!("не удалось создать `{}`", path.display()))?;
     Command::new("explorer.exe")
         .arg(path)
         .spawn()
-        .with_context(|| format!("could not open `{}`", path.display()))?;
+        .with_context(|| format!("не удалось открыть `{}`", path.display()))?;
     Ok(())
 }
 
@@ -1142,9 +1161,7 @@ mod tests {
 
         assert_eq!(backend.operations, ["activate", "restore"]);
         assert_eq!(backend.restored_registration_state, Some(true));
-        assert!(error
-            .to_string()
-            .contains("previous shortcut state was restored"));
+        assert!(error.to_string().contains("восстановлены"));
     }
 
     #[test]
@@ -1161,9 +1178,7 @@ mod tests {
         assert_eq!(backend.operations, ["activate", "persist", "restore"]);
         assert_eq!(backend.restored_registration_state, Some(false));
         assert!(!backend.registered);
-        assert!(error
-            .to_string()
-            .contains("previous shortcut state was restored"));
+        assert!(error.to_string().contains("восстановлены"));
     }
 
     #[test]

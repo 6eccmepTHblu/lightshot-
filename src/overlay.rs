@@ -120,13 +120,14 @@ impl Overlay {
         let window = Rc::new(
             event_loop
                 .create_window(attributes)
-                .context("could not create the region selection window")?,
+                .context("не удалось создать окно выбора области")?,
         );
         window.set_cursor(CursorIcon::Crosshair);
-        let context = Context::new(window.clone())
-            .map_err(|error| anyhow::anyhow!("could not initialize software rendering: {error}"))?;
+        let context = Context::new(window.clone()).map_err(|error| {
+            anyhow::anyhow!("не удалось запустить программную отрисовку: {error}")
+        })?;
         let surface = Surface::new(&context, window.clone()).map_err(|error| {
-            anyhow::anyhow!("could not create the region selection surface: {error}")
+            anyhow::anyhow!("не удалось создать поверхность выбора области: {error}")
         })?;
 
         window.set_visible(true);
@@ -160,10 +161,10 @@ impl Overlay {
         let handle = self
             .window
             .window_handle()
-            .context("could not access the region editor window handle")?;
+            .context("не удалось получить дескриптор окна редактора")?;
         match handle.as_raw() {
             RawWindowHandle::Win32(handle) => Ok(HWND(handle.hwnd.get() as *mut _)),
-            _ => anyhow::bail!("region editor is not backed by a Windows window"),
+            _ => anyhow::bail!("редактор не связан с окном Windows"),
         }
     }
 
@@ -343,17 +344,17 @@ impl Overlay {
         let x = source_origin
             .x()
             .checked_add(selection.x)
-            .context("selection x coordinate overflowed")?;
+            .context("переполнение координаты X выделения")?;
         let y = source_origin
             .y()
             .checked_add(selection.y)
-            .context("selection y coordinate overflowed")?;
+            .context("переполнение координаты Y выделения")?;
         let crop_rect =
             PhysicalRect::new(PhysicalPoint::new(x, y), selection.width, selection.height)
-                .context("selection rectangle is invalid")?;
+                .context("неверный прямоугольник выделения")?;
         self.source
             .crop(crop_rect)
-            .context("could not crop the selected pixels")
+            .context("не удалось вырезать выделенную область")
     }
 
     fn create_editor(&self, selection: PixelRect) -> Result<Editor> {
@@ -694,7 +695,7 @@ impl Overlay {
             | (u32::from(editor.color.blue()) << 16);
         let mut chooser = CHOOSECOLORW {
             lStructSize: u32::try_from(size_of::<CHOOSECOLORW>())
-                .context("color dialog structure size overflow")?,
+                .context("переполнение размера структуры диалога выбора цвета")?,
             hwndOwner: owner,
             rgbResult: COLORREF(rgb),
             lpCustColors: custom.as_mut_ptr(),
@@ -753,10 +754,12 @@ impl Overlay {
         let height = self.source.height();
         self.surface
             .resize(
-                NonZeroU32::new(width).context("overlay width is zero")?,
-                NonZeroU32::new(height).context("overlay height is zero")?,
+                NonZeroU32::new(width).context("нулевая ширина оверлея")?,
+                NonZeroU32::new(height).context("нулевая высота оверлея")?,
             )
-            .map_err(|error| anyhow::anyhow!("could not resize the overlay surface: {error}"))?;
+            .map_err(|error| {
+                anyhow::anyhow!("не удалось изменить размер поверхности оверлея: {error}")
+            })?;
 
         if self.dimmed.is_empty() {
             self.dimmed = dimmed_pixels(&self.source, DIMMED_BRIGHTNESS);
@@ -770,7 +773,7 @@ impl Overlay {
         let mut buffer = self
             .surface
             .buffer_mut()
-            .map_err(|error| anyhow::anyhow!("could not access the overlay buffer: {error}"))?;
+            .map_err(|error| anyhow::anyhow!("не удалось получить буфер оверлея: {error}"))?;
 
         // Dragging the selection only touches what it covered before and covers
         // now. `None` here means the whole surface must be redrawn and presented.
@@ -860,7 +863,7 @@ impl Overlay {
             }
             None => buffer.present(),
         };
-        presented.map_err(|error| anyhow::anyhow!("could not present the overlay: {error}"))?;
+        presented.map_err(|error| anyhow::anyhow!("не удалось вывести оверлей: {error}"))?;
         self.presented_selection
             .set(self.editor.is_none().then_some(selection_bounds));
         Ok(())
@@ -904,7 +907,7 @@ impl Editor {
         } else {
             (base, STROKE_WIDTHS[self.width_index])
         };
-        StrokeStyle::new(color, width).context("invalid annotation style")
+        StrokeStyle::new(color, width).context("недопустимый стиль аннотации")
     }
 
     fn text_size(&self) -> f32 {
@@ -937,9 +940,13 @@ impl Editor {
             (Tool::Pixelate, GestureShape::Segment { start, current }) => {
                 Annotation::pixelate(*start, *current, 12)
             }
-            _ => return Err(anyhow::anyhow!("annotation gesture did not match its tool")),
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "действие не соответствует выбранному инструменту"
+                ))
+            }
         };
-        annotation.context("could not create annotation")
+        annotation.context("не удалось создать аннотацию")
     }
 
     fn committed_frame(&self) -> &Frame {
@@ -965,7 +972,7 @@ impl Editor {
         let preview = self
             .document
             .flatten(&self.frame)
-            .context("could not render committed annotations")?;
+            .context("не удалось отрисовать аннотации")?;
         self.committed_preview = Some(preview);
         Ok(())
     }
@@ -1092,7 +1099,7 @@ impl Editor {
             Ok(frame) => Some(frame),
             Err(error) => {
                 self.refresh_committed_preview()?;
-                return Err(error).context("could not prepare object drag preview");
+                return Err(error).context("не удалось подготовить перемещение объекта");
             }
         };
         self.gesture = Some(Gesture {
@@ -1687,27 +1694,27 @@ impl ToolbarButton {
 
     const fn tooltip(self) -> &'static str {
         match self {
-            Self::Select => "Select/move/resize (V)",
-            Self::Pen => "Pen (P)",
-            Self::Highlighter => "Highlighter (H)",
-            Self::Line => "Line (L)",
-            Self::Arrow => "Arrow (A)",
-            Self::Rectangle => "Rectangle (R)",
-            Self::Ellipse => "Ellipse (E)",
-            Self::Text => "Text box (T)",
-            Self::Callout => "Callout (Q)",
-            Self::Redact => "Secure redact (B)",
-            Self::Pixelate => "Pixelate (M)",
-            Self::Eraser => "Delete object (D)",
-            Self::Crop => "Crop/resize selection (G)",
-            Self::Eyedropper => "Eyedropper (I)",
-            Self::Undo => "Undo (Ctrl+Z)",
-            Self::Redo => "Redo (Ctrl+Y)",
-            Self::Color => "Color: click cycles, right-click custom (K)",
-            Self::Width => "Stroke width / text size",
-            Self::Save => "Save As (S)",
-            Self::Copy => "Copy (C or Enter)",
-            Self::Print => "Print (O)",
+            Self::Select => "Выбрать, двигать, менять размер (V)",
+            Self::Pen => "Перо (P)",
+            Self::Highlighter => "Маркер (H)",
+            Self::Line => "Линия (L)",
+            Self::Arrow => "Стрелка (A)",
+            Self::Rectangle => "Прямоугольник (R)",
+            Self::Ellipse => "Эллипс (E)",
+            Self::Text => "Текст (T)",
+            Self::Callout => "Выноска (Q)",
+            Self::Redact => "Надёжно закрасить (B)",
+            Self::Pixelate => "Пикселизация (M)",
+            Self::Eraser => "Удалить объект (D)",
+            Self::Crop => "Обрезать или изменить выделение (G)",
+            Self::Eyedropper => "Пипетка (I)",
+            Self::Undo => "Отменить (Ctrl+Z)",
+            Self::Redo => "Повторить (Ctrl+Y)",
+            Self::Color => "Цвет: клик — следующий, правый клик — свой (K)",
+            Self::Width => "Толщина линии / размер текста",
+            Self::Save => "Сохранить как (S)",
+            Self::Copy => "Копировать (C или Enter)",
+            Self::Print => "Печать (O)",
         }
     }
 }
@@ -2488,7 +2495,7 @@ impl<'a> ToolbarIconPainter<'a> {
 }
 
 fn draw_shortcut_hints(buffer: &mut [u32], width: u32, height: u32) {
-    let text = "V Select  P Pen  T Text  B Redact  G Crop  K Color  Enter Copy  S Save  Esc Cancel";
+    let text = "V Выбор  P Перо  T Текст  B Закрасить  G Обрезка  K Цвет  Enter Копировать  S Сохранить  Esc Отмена";
     let size = 13.0;
     let (text_width, text_height) = measure_text(text, size);
     let x = 10;
@@ -2583,7 +2590,7 @@ fn draw_text_draft(
     draft: &TextDraft,
 ) {
     let content = if draft.text.is_empty() {
-        "Type text..."
+        "Введите текст..."
     } else {
         &draft.text
     };

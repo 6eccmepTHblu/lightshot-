@@ -55,7 +55,7 @@ pub fn capture_monitor_at(x: i32, y: i32) -> Result<Frame> {
 /// Captures the monitor containing a previously sampled desktop point.
 pub fn capture_monitor_at_with_cursor(x: i32, y: i32, include_cursor: bool) -> Result<Frame> {
     let monitor = Monitor::from_point(x, y)
-        .with_context(|| format!("no capturable monitor contains ({x}, {y})"))?;
+        .with_context(|| format!("в точке ({x}, {y}) нет монитора, доступного для снимка"))?;
     let frame = capture_monitor(&monitor)?;
     include_cursor_if_requested(frame, include_cursor)
 }
@@ -68,9 +68,9 @@ pub fn capture_virtual_desktop() -> Result<Frame> {
 
 /// Captures the virtual desktop and optionally composites the native pointer.
 pub fn capture_virtual_desktop_with_cursor(include_cursor: bool) -> Result<Frame> {
-    let monitors = Monitor::all().context("failed to enumerate monitors")?;
+    let monitors = Monitor::all().context("не удалось получить список мониторов")?;
     if monitors.is_empty() {
-        bail!("Windows reported no capturable monitors");
+        bail!("Windows не сообщила ни об одном мониторе, доступном для снимка");
     }
 
     let mut captures = Vec::with_capacity(monitors.len());
@@ -80,15 +80,19 @@ pub fn capture_virtual_desktop_with_cursor(include_cursor: bool) -> Result<Frame
     let mut bottom = i64::MIN;
 
     for monitor in monitors {
-        let x = monitor.x().context("failed to read monitor x coordinate")?;
-        let y = monitor.y().context("failed to read monitor y coordinate")?;
+        let x = monitor
+            .x()
+            .context("не удалось определить координату X монитора")?;
+        let y = monitor
+            .y()
+            .context("не удалось определить координату Y монитора")?;
         let image = monitor
             .capture_image()
-            .with_context(|| format!("failed to capture monitor at physical origin ({x}, {y})"))?;
+            .with_context(|| format!("не удалось снять монитор с началом в ({x}, {y})"))?;
         let width = image.width();
         let height = image.height();
         if width == 0 || height == 0 {
-            bail!("monitor at ({x}, {y}) returned an empty capture");
+            bail!("монитор в ({x}, {y}) вернул пустой снимок");
         }
 
         let monitor_right = i64::from(x) + i64::from(width);
@@ -106,13 +110,15 @@ pub fn capture_virtual_desktop_with_cursor(include_cursor: bool) -> Result<Frame
         });
     }
 
-    let width =
-        u32::try_from(right - left).context("virtual desktop width is not representable")?;
-    let height =
-        u32::try_from(bottom - top).context("virtual desktop height is not representable")?;
+    let width = u32::try_from(right - left)
+        .context("ширина виртуального рабочего стола вне допустимого диапазона")?;
+    let height = u32::try_from(bottom - top)
+        .context("высота виртуального рабочего стола вне допустимого диапазона")?;
     let origin = PhysicalPoint::new(
-        i32::try_from(left).context("virtual desktop x origin is not representable")?,
-        i32::try_from(top).context("virtual desktop y origin is not representable")?,
+        i32::try_from(left)
+            .context("начало виртуального рабочего стола по X вне допустимого диапазона")?,
+        i32::try_from(top)
+            .context("начало виртуального рабочего стола по Y вне допустимого диапазона")?,
     );
     let byte_len = rgba_len(width, height)?;
     let mut rgba = vec![0_u8; byte_len];
@@ -124,22 +130,23 @@ pub fn capture_virtual_desktop_with_cursor(include_cursor: bool) -> Result<Frame
     }
 
     let destination_stride = usize::try_from(width)
-        .context("virtual desktop width does not fit this platform")?
+        .context("ширина виртуального рабочего стола слишком велика для этой платформы")?
         .checked_mul(RGBA_CHANNELS)
-        .context("virtual desktop row size overflow")?;
+        .context("переполнение размера строки виртуального рабочего стола")?;
 
     for capture in captures {
         composite_monitor(&capture, left, top, destination_stride, &mut rgba)?;
     }
 
-    let frame = Frame::new(origin, width, height, rgba).context("invalid virtual desktop frame")?;
+    let frame = Frame::new(origin, width, height, rgba)
+        .context("неверный кадр виртуального рабочего стола")?;
     include_cursor_if_requested(frame, include_cursor)
 }
 
 fn cursor_position() -> Result<POINT> {
     let mut point = POINT::default();
     // SAFETY: `point` is a valid, writable POINT for the duration of the call.
-    unsafe { GetCursorPos(&mut point) }.context("failed to read cursor position")?;
+    unsafe { GetCursorPos(&mut point) }.context("не удалось определить положение курсора")?;
     Ok(point)
 }
 
@@ -158,7 +165,7 @@ fn composite_cursor(frame: Frame) -> Result<Frame> {
         ..Default::default()
     };
     // SAFETY: `cursor` has the documented size and remains writable for the call.
-    unsafe { GetCursorInfo(&mut cursor) }.context("failed to read the native cursor image")?;
+    unsafe { GetCursorInfo(&mut cursor) }.context("не удалось получить изображение курсора")?;
     if cursor.flags.0 & CURSOR_SHOWING.0 == 0 || cursor.hCursor.is_invalid() {
         return Ok(frame);
     }
@@ -166,7 +173,7 @@ fn composite_cursor(frame: Frame) -> Result<Frame> {
     let mut icon = ICONINFO::default();
     // SAFETY: the cursor handle came from GetCursorInfo and `icon` is writable.
     unsafe { GetIconInfo(HICON(cursor.hCursor.0), &mut icon) }
-        .context("failed to inspect the native cursor image")?;
+        .context("не удалось разобрать изображение курсора")?;
     let icon = OwnedIconInfo(icon);
 
     let hotspot_x = i64::from(icon.0.xHotspot);
@@ -204,10 +211,10 @@ fn composite_cursor(frame: Frame) -> Result<Frame> {
             DI_NORMAL,
         )
     }
-    .context("failed to composite the native cursor")?;
+    .context("не удалось наложить курсор на снимок")?;
     // SAFETY: flushes this thread's queued GDI drawing before direct DIB access.
     if !unsafe { GdiFlush() }.as_bool() {
-        return Err(WindowsError::from_thread()).context("failed to flush cursor drawing");
+        return Err(WindowsError::from_thread()).context("не удалось завершить отрисовку курсора");
     }
 
     for (source, destination) in dib
@@ -217,15 +224,19 @@ fn composite_cursor(frame: Frame) -> Result<Frame> {
     {
         destination.copy_from_slice(&[source[2], source[1], source[0], u8::MAX]);
     }
-    Frame::new(origin, width, height, rgba).context("cursor compositing produced an invalid frame")
+    Frame::new(origin, width, height, rgba).context("наложение курсора дало неверный кадр")
 }
 
 fn capture_monitor(monitor: &Monitor) -> Result<Frame> {
-    let x = monitor.x().context("failed to read monitor x coordinate")?;
-    let y = monitor.y().context("failed to read monitor y coordinate")?;
+    let x = monitor
+        .x()
+        .context("не удалось определить координату X монитора")?;
+    let y = monitor
+        .y()
+        .context("не удалось определить координату Y монитора")?;
     let image = monitor
         .capture_image()
-        .with_context(|| format!("failed to capture monitor at ({x}, {y})"))?;
+        .with_context(|| format!("не удалось снять монитор в ({x}, {y})"))?;
 
     Frame::new(
         PhysicalPoint::new(x, y),
@@ -233,7 +244,7 @@ fn capture_monitor(monitor: &Monitor) -> Result<Frame> {
         image.height(),
         image.into_raw(),
     )
-    .context("monitor capture returned an invalid frame")
+    .context("снимок монитора вернул неверный кадр")
 }
 
 fn composite_monitor(
@@ -244,45 +255,45 @@ fn composite_monitor(
     destination: &mut [u8],
 ) -> Result<()> {
     let source_stride = usize::try_from(capture.width)
-        .context("monitor width does not fit this platform")?
+        .context("ширина монитора слишком велика для этой платформы")?
         .checked_mul(RGBA_CHANNELS)
-        .context("monitor row size overflow")?;
+        .context("переполнение размера строки монитора")?;
     let expected_source_len = rgba_len(capture.width, capture.height)?;
     if capture.rgba.len() != expected_source_len {
         bail!(
-            "monitor capture buffer has {} bytes, expected {expected_source_len}",
+            "в буфере снимка монитора {} байт, ожидалось {expected_source_len}",
             capture.rgba.len()
         );
     }
 
     let x_offset = usize::try_from(i64::from(capture.x) - virtual_left)
-        .context("monitor has an invalid virtual-desktop x offset")?;
+        .context("у монитора неверное смещение по X на виртуальном рабочем столе")?;
     let y_offset = usize::try_from(i64::from(capture.y) - virtual_top)
-        .context("monitor has an invalid virtual-desktop y offset")?;
+        .context("у монитора неверное смещение по Y на виртуальном рабочем столе")?;
     let x_bytes = x_offset
         .checked_mul(RGBA_CHANNELS)
-        .context("monitor destination x offset overflow")?;
-    let row_count =
-        usize::try_from(capture.height).context("monitor height does not fit this platform")?;
+        .context("переполнение смещения монитора по X")?;
+    let row_count = usize::try_from(capture.height)
+        .context("высота монитора слишком велика для этой платформы")?;
 
     for row in 0..row_count {
         let source_start = row
             .checked_mul(source_stride)
-            .context("monitor source row offset overflow")?;
+            .context("переполнение смещения исходной строки монитора")?;
         let source_end = source_start
             .checked_add(source_stride)
-            .context("monitor source row end overflow")?;
+            .context("переполнение конца исходной строки монитора")?;
         let destination_start = y_offset
             .checked_add(row)
             .and_then(|row| row.checked_mul(destination_stride))
             .and_then(|row| row.checked_add(x_bytes))
-            .context("monitor destination row offset overflow")?;
+            .context("переполнение смещения целевой строки монитора")?;
         let destination_end = destination_start
             .checked_add(source_stride)
-            .context("monitor destination row end overflow")?;
+            .context("переполнение конца целевой строки монитора")?;
         let output = destination
             .get_mut(destination_start..destination_end)
-            .context("monitor lies outside the virtual desktop buffer")?;
+            .context("монитор находится за пределами буфера виртуального рабочего стола")?;
         output.copy_from_slice(&capture.rgba[source_start..source_end]);
     }
 
@@ -298,7 +309,7 @@ fn rgba_len(width: u32, height: u32) -> Result<usize> {
                 .and_then(|height| width.checked_mul(height))
         })
         .and_then(|pixels| pixels.checked_mul(RGBA_CHANNELS))
-        .context("capture buffer size overflow")
+        .context("переполнение размера буфера снимка")
 }
 
 struct CapturedMonitor {
@@ -332,9 +343,9 @@ struct DibSurface {
 
 impl DibSurface {
     fn new(width: u32, height: u32, len: usize) -> Result<Self> {
-        let width = i32::try_from(width).context("capture width exceeds the GDI limit")?;
-        let height = i32::try_from(height).context("capture height exceeds the GDI limit")?;
-        let image_size = u32::try_from(len).context("capture is too large for a GDI bitmap")?;
+        let width = i32::try_from(width).context("ширина снимка превышает предел GDI")?;
+        let height = i32::try_from(height).context("высота снимка превышает предел GDI")?;
+        let image_size = u32::try_from(len).context("снимок слишком велик для изображения GDI")?;
         let mut info = BITMAPINFO::default();
         info.bmiHeader.biSize = u32::try_from(size_of_val(&info.bmiHeader))
             .expect("BITMAPINFOHEADER structure size always fits u32");
@@ -348,7 +359,8 @@ impl DibSurface {
         // SAFETY: a null source DC requests a memory DC compatible with the screen.
         let dc = unsafe { CreateCompatibleDC(None) };
         if dc.is_invalid() {
-            return Err(WindowsError::from_thread()).context("failed to create a cursor memory DC");
+            return Err(WindowsError::from_thread())
+                .context("не удалось создать контекст памяти для курсора");
         }
 
         let mut bits = std::ptr::null_mut();
@@ -361,14 +373,14 @@ impl DibSurface {
             Err(error) => {
                 // SAFETY: `dc` was created above and is not selected elsewhere.
                 let _ = unsafe { DeleteDC(dc) };
-                return Err(error).context("failed to create a cursor compositing bitmap");
+                return Err(error).context("не удалось создать изображение для наложения курсора");
             }
         };
         let Some(bits) = NonNull::new(bits.cast::<u8>()) else {
             // SAFETY: these resources were created above and are still unselected.
             let _ = unsafe { DeleteObject(HGDIOBJ(bitmap.0)) };
             let _ = unsafe { DeleteDC(dc) };
-            bail!("cursor compositing bitmap returned no pixel storage");
+            bail!("изображение для наложения курсора не получило память для пикселей");
         };
 
         // SAFETY: both handles are valid and the bitmap is not selected into
@@ -379,7 +391,7 @@ impl DibSurface {
             let _ = unsafe { DeleteObject(HGDIOBJ(bitmap.0)) };
             let _ = unsafe { DeleteDC(dc) };
             return Err(WindowsError::from_thread())
-                .context("failed to select the cursor compositing bitmap");
+                .context("не удалось выбрать изображение для наложения курсора");
         }
 
         Ok(Self {

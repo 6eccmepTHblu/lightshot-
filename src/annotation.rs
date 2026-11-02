@@ -967,21 +967,21 @@ fn flatten_filtered(
 
 #[derive(Clone, Debug, Error, PartialEq)]
 pub enum AnnotationError {
-    #[error("stroke width must be finite and greater than zero, got {0}")]
+    #[error("толщина линии должна быть конечной и больше нуля, указано {0}")]
     InvalidStrokeWidth(f32),
-    #[error("text size must be between 10 and 128 pixels, got {0}")]
+    #[error("размер текста должен быть от 10 до 128 пикселей, указано {0}")]
     InvalidTextSize(f32),
-    #[error("pixelation block must be at least 2 pixels, got {0}")]
+    #[error("блок пикселизации должен быть не меньше 2 пикселей, указано {0}")]
     InvalidPixelBlock(u8),
-    #[error("a pen or highlighter stroke needs at least one point")]
+    #[error("для штриха пером или маркером нужна хотя бы одна точка")]
     EmptyStroke,
-    #[error("a text annotation cannot be empty")]
+    #[error("текстовая надпись не может быть пустой")]
     EmptyText,
-    #[error("annotation point must contain finite coordinates: {0:?}")]
+    #[error("координаты точки аннотации должны быть конечными: {0:?}")]
     InvalidPoint(Point),
-    #[error("annotation bounds must contain finite coordinates: {0:?}")]
+    #[error("границы аннотации должны иметь конечные координаты: {0:?}")]
     InvalidBounds(Bounds),
-    #[error("could not allocate a {width}x{height} annotation pixmap")]
+    #[error("не удалось выделить память под изображение аннотации {width}x{height}")]
     PixmapAllocation { width: u32, height: u32 },
     #[error(transparent)]
     Frame(#[from] FrameError),

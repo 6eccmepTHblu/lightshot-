@@ -218,19 +218,19 @@ impl Frame {
 
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum FrameError {
-    #[error("a frame or rectangle cannot be empty ({width}x{height})")]
+    #[error("кадр или прямоугольник не может быть пустым ({width}x{height})")]
     EmptyDimensions { width: u32, height: u32 },
 
-    #[error("RGBA buffer size overflows this platform for {width}x{height}")]
+    #[error("размер буфера RGBA слишком велик для этой платформы: {width}x{height}")]
     BufferSizeOverflow { width: u32, height: u32 },
 
-    #[error("physical rectangle extends beyond the representable desktop coordinates")]
+    #[error("прямоугольник выходит за допустимые координаты рабочего стола")]
     CoordinateOverflow,
 
-    #[error("invalid RGBA buffer length: expected {expected} bytes, got {actual}")]
+    #[error("неверная длина буфера RGBA: ожидалось {expected} байт, получено {actual}")]
     InvalidBufferLength { expected: usize, actual: usize },
 
-    #[error("crop {crop:?} is outside frame bounds {frame:?}")]
+    #[error("область обрезки {crop:?} выходит за границы кадра {frame:?}")]
     CropOutsideFrame {
         crop: PhysicalRect,
         frame: PhysicalRect,

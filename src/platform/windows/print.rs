@@ -60,12 +60,12 @@ pub fn print_frame(frame: &Frame, owner: Option<HWND>) -> Result<PrintOutcome> {
         if extended_error == 0 {
             return Ok(PrintOutcome::Cancelled);
         }
-        bail!("Windows print dialog failed with error 0x{extended_error:08x}");
+        bail!("ошибка диалога печати Windows: 0x{extended_error:08x}");
     }
 
     let resources = PrintResources::take_from(&mut dialog);
     if resources.dc.is_invalid() {
-        bail!("the selected printer did not return a device context");
+        bail!("выбранный принтер не вернул контекст устройства");
     }
     print_to_dc(frame, resources.dc)?;
     Ok(PrintOutcome::Printed)
@@ -77,23 +77,25 @@ fn print_to_dc(frame: &Frame, dc: windows::Win32::Graphics::Gdi::HDC) -> Result<
     // SAFETY: same valid printer DC.
     let page_height = unsafe { GetDeviceCaps(Some(dc), VERTRES) };
     if page_width <= 0 || page_height <= 0 {
-        bail!("printer reported an invalid printable area");
+        bail!("принтер сообщил неверную область печати");
     }
 
     let (destination_width, destination_height) = aspect_fit(
         frame.width(),
         frame.height(),
-        u32::try_from(page_width).context("invalid printer page width")?,
-        u32::try_from(page_height).context("invalid printer page height")?,
+        u32::try_from(page_width).context("неверная ширина страницы принтера")?,
+        u32::try_from(page_height).context("неверная высота страницы принтера")?,
     );
     let destination_x = (page_width
-        - i32::try_from(destination_width).context("scaled print width exceeds GDI limits")?)
+        - i32::try_from(destination_width)
+            .context("ширина печати после масштабирования превышает пределы GDI")?)
         / 2;
     let destination_y = (page_height
-        - i32::try_from(destination_height).context("scaled print height exceeds GDI limits")?)
+        - i32::try_from(destination_height)
+            .context("высота печати после масштабирования превышает пределы GDI")?)
         / 2;
     let bitmap = print_bitmap(frame)?;
-    let document_name: Vec<u16> = "Rustshot Screenshot\0".encode_utf16().collect();
+    let document_name: Vec<u16> = "Снимок Rustshot\0".encode_utf16().collect();
     let document = DOCINFOW {
         cbSize: i32::try_from(size_of::<DOCINFOW>()).expect("DOCINFOW size always fits i32"),
         lpszDocName: PCWSTR(document_name.as_ptr()),
@@ -103,14 +105,15 @@ fn print_to_dc(frame: &Frame, dc: windows::Win32::Graphics::Gdi::HDC) -> Result<
     // SAFETY: `dc` is valid and `document` points to a live, terminated UTF-16
     // title for this call.
     if unsafe { StartDocW(dc, &document) } <= 0 {
-        return Err(windows::core::Error::from_thread()).context("failed to start the print job");
+        return Err(windows::core::Error::from_thread())
+            .context("не удалось начать задание печати");
     }
 
     // SAFETY: a document is active on this printer DC.
     if unsafe { StartPage(dc) } <= 0 {
         abort_document(dc);
         return Err(windows::core::Error::from_thread())
-            .context("failed to start the printer page");
+            .context("не удалось начать страницу печати");
     }
 
     // SAFETY: the printer DC is active. HALFTONE is a valid stretch mode.
@@ -118,7 +121,7 @@ fn print_to_dc(frame: &Frame, dc: windows::Win32::Graphics::Gdi::HDC) -> Result<
     if previous_mode == 0 {
         abort_document(dc);
         return Err(windows::core::Error::from_thread())
-            .context("failed to configure high-quality printer scaling");
+            .context("не удалось настроить качественное масштабирование при печати");
     }
 
     // SAFETY: `bitmap.pixels` contains the tightly packed 32-bit top-down DIB
@@ -132,8 +135,8 @@ fn print_to_dc(frame: &Frame, dc: windows::Win32::Graphics::Gdi::HDC) -> Result<
             i32::try_from(destination_height).expect("validated destination height fits i32"),
             0,
             0,
-            i32::try_from(frame.width()).context("image width exceeds GDI limit")?,
-            i32::try_from(frame.height()).context("image height exceeds GDI limit")?,
+            i32::try_from(frame.width()).context("ширина изображения превышает предел GDI")?,
+            i32::try_from(frame.height()).context("высота изображения превышает предел GDI")?,
             Some(bitmap.pixels.as_ptr().cast()),
             &bitmap.info,
             DIB_RGB_COLORS,
@@ -142,19 +145,20 @@ fn print_to_dc(frame: &Frame, dc: windows::Win32::Graphics::Gdi::HDC) -> Result<
     };
     if copied_lines == 0 || copied_lines == GDI_ERROR {
         abort_document(dc);
-        bail!("printer driver rejected the screenshot bitmap");
+        bail!("драйвер принтера отклонил изображение снимка");
     }
 
     // SAFETY: a page is active on this printer DC.
     if unsafe { EndPage(dc) } <= 0 {
         abort_document(dc);
         return Err(windows::core::Error::from_thread())
-            .context("failed to finish the printer page");
+            .context("не удалось завершить страницу печати");
     }
 
     // SAFETY: the page is closed and the document remains active.
     if unsafe { EndDoc(dc) } <= 0 {
-        return Err(windows::core::Error::from_thread()).context("failed to finish the print job");
+        return Err(windows::core::Error::from_thread())
+            .context("не удалось завершить задание печати");
     }
 
     Ok(())
@@ -167,15 +171,16 @@ fn abort_document(dc: windows::Win32::Graphics::Gdi::HDC) {
 }
 
 fn print_bitmap(frame: &Frame) -> Result<PrintBitmap> {
-    let width = i32::try_from(frame.width()).context("image width exceeds the GDI limit")?;
-    let height = i32::try_from(frame.height()).context("image height exceeds the GDI limit")?;
+    let width = i32::try_from(frame.width()).context("ширина изображения превышает предел GDI")?;
+    let height =
+        i32::try_from(frame.height()).context("высота изображения превышает предел GDI")?;
     let mut pixels = Vec::with_capacity(frame.rgba().len());
     for rgba in frame.rgba().chunks_exact(RGBA_CHANNELS) {
         // BI_RGB's fourth byte is unused. Zero avoids printer-driver alpha quirks.
         pixels.extend_from_slice(&[rgba[2], rgba[1], rgba[0], 0]);
     }
     if pixels.len() != frame.rgba().len() {
-        bail!("invalid RGBA frame buffer");
+        bail!("неверный буфер кадра RGBA");
     }
 
     let mut info = BITMAPINFO::default();
@@ -187,7 +192,7 @@ fn print_bitmap(frame: &Frame) -> Result<PrintBitmap> {
     info.bmiHeader.biBitCount = 32;
     info.bmiHeader.biCompression = BI_RGB.0;
     info.bmiHeader.biSizeImage =
-        u32::try_from(pixels.len()).context("print bitmap is too large for GDI")?;
+        u32::try_from(pixels.len()).context("изображение для печати слишком велико для GDI")?;
 
     Ok(PrintBitmap { info, pixels })
 }

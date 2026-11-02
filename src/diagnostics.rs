@@ -32,7 +32,7 @@ fn initialize_inner() -> io::Result<()> {
     let log_path = prepare_log(&directory)?;
     append_line(
         &log_path,
-        &format!("started Rustshot {}", env!("CARGO_PKG_VERSION")),
+        &format!("запущен Rustshot {}", env!("CARGO_PKG_VERSION")),
     )
 }
 
@@ -82,7 +82,7 @@ pub fn write_report(config: &Config) -> io::Result<PathBuf> {
     let recent_log = fs::read_to_string(&log_path)
         .ok()
         .map(|log| tail_lines(&log, REPORT_LOG_LINES))
-        .unwrap_or_else(|| "No diagnostic log is available.\n".to_owned());
+        .unwrap_or_else(|| "Диагностический журнал недоступен.\n".to_owned());
     let report = report_text(config, &log_path, &recent_log);
     let report_path = directory.join(REPORT_FILE_NAME);
     fs::write(&report_path, report)?;
@@ -112,44 +112,52 @@ fn report_text(config: &Config, log_path: &std::path::Path, recent_log: &str) ->
     } else {
         "release"
     };
-    let _ = writeln!(report, "Rustshot diagnostics");
+    let _ = writeln!(report, "Диагностика Rustshot");
     let _ = writeln!(report, "====================");
-    let _ = writeln!(report, "Version: {}", env!("CARGO_PKG_VERSION"));
+    let _ = writeln!(report, "Версия: {}", env!("CARGO_PKG_VERSION"));
     let _ = writeln!(
         report,
-        "Target: {}-{}",
+        "Платформа: {}-{}",
         std::env::consts::ARCH,
         std::env::consts::OS
     );
-    let _ = writeln!(report, "Build profile: {profile}");
-    let _ = writeln!(report, "Configuration schema: {}", config.config_version);
+    let _ = writeln!(report, "Профиль сборки: {profile}");
+    let _ = writeln!(report, "Версия настроек: {}", config.config_version);
     let _ = writeln!(
         report,
-        "Configuration path: {}",
+        "Путь к настройкам: {}",
         config_path().map_or_else(
-            |error| format!("unavailable ({error})"),
+            |error| format!("недоступно ({error})"),
             |path| path.display().to_string()
         )
     );
-    let _ = writeln!(report, "Diagnostic log: {}", log_path.display());
+    let _ = writeln!(report, "Диагностический журнал: {}", log_path.display());
     let _ = writeln!(
         report,
-        "Autosave directory: {}",
+        "Папка автосохранения: {}",
         config.autosave_directory.display()
     );
     let _ = writeln!(
         report,
-        "Full-screen shortcut: {}",
+        "Сочетание для всего экрана: {}",
         config.fullscreen_shortcut
     );
-    let _ = writeln!(report, "Region shortcut: {}", config.region_shortcut);
-    let _ = writeln!(report, "Image format: {:?}", config.image_format);
-    let _ = writeln!(report, "Monitor scope: {:?}", config.monitor_scope);
-    let _ = writeln!(report, "Include cursor: {}", config.include_cursor);
-    let _ = writeln!(report, "Region auto-copy: {}", config.region_auto_copy);
-    let _ = writeln!(report, "Region autosave: {}", config.region_autosave);
+    let _ = writeln!(
+        report,
+        "Сочетание для выбора области: {}",
+        config.region_shortcut
+    );
+    let _ = writeln!(report, "Формат изображения: {:?}", config.image_format);
+    let _ = writeln!(report, "Область снимка экрана: {:?}", config.monitor_scope);
+    let _ = writeln!(report, "Показывать курсор: {}", config.include_cursor);
+    let _ = writeln!(
+        report,
+        "Автокопирование области: {}",
+        config.region_auto_copy
+    );
+    let _ = writeln!(report, "Автосохранение области: {}", config.region_autosave);
     let _ = writeln!(report);
-    let _ = writeln!(report, "Recent diagnostic log");
+    let _ = writeln!(report, "Последние записи журнала");
     let _ = writeln!(report, "---------------------");
     report.push_str(recent_log);
     report
@@ -169,8 +177,8 @@ mod tests {
             "a recent error\n",
         );
 
-        assert!(report.contains("Version: 1.0.0"));
-        assert!(report.contains("Configuration schema: 1"));
+        assert!(report.contains("Версия: 1.0.0"));
+        assert!(report.contains("Версия настроек: 1"));
         assert!(report.contains("a recent error"));
     }
 
