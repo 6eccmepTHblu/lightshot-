@@ -28,7 +28,7 @@ pub const CURRENT_CONFIG_VERSION: u32 = 1;
 pub const DEFAULT_FULLSCREEN_SHORTCUT: &str = "control+shift+F11";
 
 /// Default shortcut for opening the interactive region selector.
-pub const DEFAULT_REGION_SHORTCUT: &str = "control+shift+F10";
+pub const DEFAULT_REGION_SHORTCUT: &str = "PrintScreen";
 
 const DEFAULT_JPEG_QUALITY: u8 = 90;
 const TEMP_FILE_ATTEMPTS: u8 = 32;
@@ -62,6 +62,8 @@ pub struct Config {
     pub region_autosave: bool,
     /// Allow copied screenshots in the local Win+V history. Cloud sync is always refused.
     pub clipboard_history: bool,
+    /// The one-time advice about the Windows Print Screen setting was shown.
+    pub print_screen_hint_shown: bool,
     /// Tool restored when the next region editor opens.
     pub last_editor_tool: EditorTool,
     /// Opaque annotation color restored by the region editor.
@@ -230,6 +232,7 @@ impl Default for Config {
             region_auto_copy: false,
             region_autosave: false,
             clipboard_history: false,
+            print_screen_hint_shown: false,
             last_editor_tool: EditorTool::default(),
             editor_color: RgbColor::default(),
             editor_stroke_width: 1,
@@ -744,6 +747,7 @@ mod tests {
             region_auto_copy: true,
             region_autosave: true,
             clipboard_history: true,
+            print_screen_hint_shown: true,
             last_editor_tool: EditorTool::Callout,
             editor_color: RgbColor::new(12, 34, 56),
             editor_stroke_width: 3,

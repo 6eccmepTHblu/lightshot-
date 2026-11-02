@@ -11,7 +11,7 @@ use chrono::Local;
 use global_hotkey::{hotkey::HotKey, GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
 use rfd::{FileDialog, MessageButtons, MessageDialog, MessageDialogResult, MessageLevel};
 use rustshot::{
-    config::{config_path, Config, MonitorScope},
+    config::{config_path, Config, MonitorScope, DEFAULT_REGION_SHORTCUT},
     encode::{encode_and_save_atomic, encode_and_save_replace_atomic, EncodeOptions, OutputFormat},
     frame::Frame,
     platform::windows::{
@@ -20,6 +20,7 @@ use rustshot::{
             current_cursor_position,
         },
         clipboard::copy_to_clipboard_with_owner,
+        keyboard::print_screen_opens_snipping_tool,
         print::{print_frame, PrintOutcome},
     },
 };
@@ -173,6 +174,43 @@ impl RustshotApp {
         }
     }
 
+    /// Explains once how to free Print Screen. RustShot never changes the
+    /// Windows setting itself.
+    fn advise_about_print_screen(&mut self) {
+        if self.config.print_screen_hint_shown
+            || !self
+                .config
+                .region_shortcut
+                .as_str()
+                .eq_ignore_ascii_case(DEFAULT_REGION_SHORTCUT)
+            || !print_screen_opens_snipping_tool()
+        {
+            return;
+        }
+        self.config.print_screen_hint_shown = true;
+        if let Err(error) = self.config.save() {
+            show_error("Could not save settings", &error.to_string());
+        }
+        let answer = MessageDialog::new()
+            .set_level(MessageLevel::Info)
+            .set_title("Print Screen may open Windows screen capture")
+            .set_description(
+                "If Print Screen opens the Windows capture bar instead of RustShot, turn off \
+                 \"Use the Print Screen key to open screen capture\" in Windows Settings.\n\n\
+                 Open that page now?",
+            )
+            .set_buttons(MessageButtons::YesNo)
+            .show();
+        if answer == MessageDialogResult::Yes {
+            if let Err(error) = Command::new("explorer.exe")
+                .arg("ms-settings:easeofaccess-keyboard")
+                .spawn()
+            {
+                show_error("Could not open Windows Settings", &error.to_string());
+            }
+        }
+    }
+
     fn initialize(&mut self) {
         if self.tray.is_none() {
             match build_tray_icon() {
@@ -191,6 +229,7 @@ impl RustshotApp {
                 ),
             }
         }
+        self.advise_about_print_screen();
         if self.open_settings_on_start {
             self.open_settings_on_start = false;
             self.open_settings_window();

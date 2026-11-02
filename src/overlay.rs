@@ -407,6 +407,12 @@ impl Overlay {
         }
 
         if self.modifiers.control_key() {
+            if character_is(key, "c") {
+                return self.export(ExportKind::Copy);
+            }
+            if character_is(key, "s") {
+                return self.export(ExportKind::Save);
+            }
             let edit = if character_is(key, "z") {
                 self.editor.as_mut().map(Editor::undo)
             } else if character_is(key, "y") {

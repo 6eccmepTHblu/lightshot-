@@ -47,8 +47,12 @@ RustShot starts in the system tray. The default shortcuts are:
 
 | Shortcut | Action |
 | --- | --- |
-| `Ctrl+Shift+F10` | Select and edit a region |
+| `Print Screen` | Select and edit a region |
 | `Ctrl+Shift+F11` | Capture and save the current monitor |
+
+Windows 11 can reserve `Print Screen` for its own screen capture. If it does, turn off **Use the
+Print Screen key to open screen capture** under Settings > Accessibility > Keyboard, or choose
+another shortcut in RustShot's settings.
 
 The tray menu provides capture commands, the screenshots folder, settings, diagnostics, and quit.
 Shortcuts, output format, monitor scope, cursor capture, automatic copy, and automatic save are all
@@ -71,7 +75,9 @@ After selecting a region, annotations remain editable until export.
 | `U` / `Ctrl+Z` | Undo |
 | `Y` / `Ctrl+Y` | Redo |
 | `X` | Clear annotations |
-| `S`, `C`, `O` | Save As, copy, print |
+| `S` / `Ctrl+S` | Save As |
+| `C` / `Ctrl+C` | Copy |
+| `O` | Print |
 | `Enter` | Copy |
 | `Escape` | Cancel the active edit or capture |
 
