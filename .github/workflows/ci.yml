@@ -29,6 +29,7 @@ jobs:
       - run: cargo test --locked --all-targets
       - run: cargo build --release --locked
       - run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-no-network.ps1
+      - run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-dll-search.ps1
 
   dependencies:
     runs-on: ubuntu-latest

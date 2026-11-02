@@ -15,6 +15,12 @@ fn main() {
         "resources/rustshot.manifest must contain {expected_manifest_version}"
     );
 
+    if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") {
+        // LOAD_LIBRARY_SEARCH_SYSTEM32: resolve the import table from System32
+        // only, so a DLL dropped beside the portable executable is never loaded.
+        println!("cargo:rustc-link-arg-bins=/DEPENDENTLOADFLAG:0x800");
+    }
+
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         let mut resource = winresource::WindowsResource::new();
         resource.set_icon("resources/rustshot.ico");

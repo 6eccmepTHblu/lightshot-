@@ -2,7 +2,6 @@
 
 use std::{
     path::{Path, PathBuf},
-    process::Command,
     thread,
 };
 
@@ -21,6 +20,7 @@ use rustshot::{
         },
         clipboard::copy_to_clipboard_with_owner,
         keyboard::print_screen_opens_snipping_tool,
+        loader::explorer_command,
         print::{print_frame, PrintOutcome},
     },
 };
@@ -202,10 +202,11 @@ impl RustshotApp {
             .set_buttons(MessageButtons::YesNo)
             .show();
         if answer == MessageDialogResult::Yes {
-            if let Err(error) = Command::new("explorer.exe")
-                .arg("ms-settings:easeofaccess-keyboard")
-                .spawn()
-            {
+            let opened = explorer_command().and_then(|mut command| {
+                command.arg("ms-settings:easeofaccess-keyboard").spawn()?;
+                Ok(())
+            });
+            if let Err(error) = opened {
                 show_error("Не удалось открыть параметры Windows", &error.to_string());
             }
         }
@@ -1014,7 +1015,7 @@ fn output_format_from_path(path: &Path) -> Option<OutputFormat> {
 fn open_path(path: &Path) -> Result<()> {
     std::fs::create_dir_all(path)
         .with_context(|| format!("не удалось создать `{}`", path.display()))?;
-    Command::new("explorer.exe")
+    explorer_command()?
         .arg(path)
         .spawn()
         .with_context(|| format!("не удалось открыть `{}`", path.display()))?;

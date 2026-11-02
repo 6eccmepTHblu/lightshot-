@@ -3,4 +3,5 @@
 pub mod capture;
 pub mod clipboard;
 pub mod keyboard;
+pub mod loader;
 pub mod print;

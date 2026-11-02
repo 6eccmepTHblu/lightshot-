@@ -16,7 +16,11 @@ mod single_instance;
 
 #[cfg(target_os = "windows")]
 fn main() {
+    let restricted_dll_search = rustshot::platform::windows::loader::restrict_dll_search();
     diagnostics::initialize();
+    if let Err(error) = restricted_dll_search {
+        diagnostics::record_error("Не удалось ограничить поиск DLL", &error.to_string());
+    }
     install_panic_dialog();
     let _single_instance = match single_instance::SingleInstance::acquire() {
         Ok(Some(instance)) => instance,
