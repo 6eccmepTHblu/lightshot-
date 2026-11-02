@@ -212,6 +212,9 @@ function Close-CaptureOverlay {
     if (!$Handle) {
         return
     }
+    # The cold-readiness probe can reactivate the pattern window just after the
+    # overlay opens, and Escape only reaches the foreground window.
+    [RustshotBench.NativeBench]::ActivateWindow($Handle)
     [RustshotBench.NativeBench]::SendEscape()
     if (![RustshotBench.NativeBench]::WaitForWindowGone($Handle, $Timeout)) {
         [RustshotBench.NativeBench]::SendEscape()

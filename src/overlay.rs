@@ -1,17 +1,17 @@
 //! Full-screen region selection and allocation-conscious annotation window.
 
-use std::{mem::size_of, num::NonZeroU32, rc::Rc};
+use std::{cell::Cell, mem::size_of, num::NonZeroU32, rc::Rc};
 
 use anyhow::{Context as _, Result};
 use rustshot::{
     annotation::{
-        draw_text_bgrx, measure_text, Annotation, AnnotationDocument, Bounds, Color, Point,
-        StrokeStyle,
+        draw_text_bgrx, measure_text, release_ui_font, Annotation, AnnotationDocument, Bounds,
+        Color, Point, StrokeStyle,
     },
     config::{EditorTool, RgbColor},
     frame::{Frame, PhysicalPoint, PhysicalRect},
 };
-use softbuffer::{Context, Surface};
+use softbuffer::{Context, Rect, Surface};
 use windows::Win32::{
     Foundation::{COLORREF, HWND, LPARAM},
     UI::Controls::Dialogs::{ChooseColorW, CC_FULLOPEN, CC_RGBINIT, CHOOSECOLORW},
@@ -20,7 +20,7 @@ use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event::{ElementState, MouseButton, WindowEvent},
     event_loop::ActiveEventLoop,
-    keyboard::{Key, ModifiersState, NamedKey},
+    keyboard::{Key, KeyCode, ModifiersState, NamedKey, PhysicalKey},
     platform::windows::WindowAttributesExtWindows,
     raw_window_handle::{HasWindowHandle as _, RawWindowHandle},
     window::{CursorIcon, Window, WindowId, WindowLevel},
@@ -36,6 +36,9 @@ const TOOLBAR_BUTTONS: usize = 21;
 const TOOLBAR_COLUMNS: usize = 11;
 const DEFAULT_BUTTON_SIZE: i32 = 38;
 const MIN_BUTTON_SIZE: i32 = 24;
+const DIMMED_BRIGHTNESS: u8 = 42;
+const DIMENSIONS_LABEL_WIDTH: i32 = 82;
+const DIMENSIONS_LABEL_HEIGHT: i32 = 20;
 
 const PALETTE: [Color; 6] = [
     Color::rgba(255, 64, 64, 255),
@@ -73,6 +76,11 @@ pub struct Overlay {
     _context: Context<Rc<Window>>,
     surface: Surface<Rc<Window>, Rc<Window>>,
     source: Frame,
+    /// Dimmed copy of `source` in surface format, built on the first draw.
+    dimmed: Vec<u32>,
+    /// What the selection phase last left in the surface: the outer `None` means
+    /// unknown, so the next draw must be full; the inner one means only `dimmed`.
+    presented_selection: Cell<Option<Option<PixelRect>>>,
     cursor: PixelPoint,
     selection_anchor: Option<PixelPoint>,
     selection_cursor: Option<PixelPoint>,
@@ -81,6 +89,12 @@ pub struct Overlay {
     preferences: EditorPreferences,
     finish_after_selection: bool,
     hovered_button: Option<ToolbarButton>,
+}
+
+impl Drop for Overlay {
+    fn drop(&mut self) {
+        release_ui_font();
+    }
 }
 
 impl Overlay {
@@ -124,6 +138,8 @@ impl Overlay {
             _context: context,
             surface,
             source,
+            dimmed: Vec::new(),
+            presented_selection: Cell::new(None),
             cursor: PixelPoint::default(),
             selection_anchor: None,
             selection_cursor: None,
@@ -154,6 +170,7 @@ impl Overlay {
     pub fn set_visible(&self, visible: bool) {
         self.window.set_visible(visible);
         if visible {
+            self.presented_selection.set(None);
             self.window.focus_window();
             self.window.request_redraw();
         }
@@ -171,6 +188,7 @@ impl Overlay {
         match event {
             WindowEvent::CloseRequested => OverlayOutcome::Cancel,
             WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
+                self.presented_selection.set(None);
                 self.window.request_redraw();
                 OverlayOutcome::None
             }
@@ -222,7 +240,8 @@ impl Overlay {
                 is_synthetic: false,
                 ..
             } if event.state == ElementState::Pressed => {
-                self.handle_key(&event.logical_key, event.text.as_deref())
+                let key = shortcut_key(&event.logical_key, event.physical_key);
+                self.handle_key(&key, event.text.as_deref())
             }
             _ => OverlayOutcome::None,
         }
@@ -733,11 +752,33 @@ impl Overlay {
             )
             .map_err(|error| anyhow::anyhow!("could not resize the overlay surface: {error}"))?;
 
+        if self.dimmed.is_empty() {
+            self.dimmed = dimmed_pixels(&self.source, DIMMED_BRIGHTNESS);
+        }
+        let selection = match (&self.editor, self.selection_anchor, self.selection_cursor) {
+            (None, Some(anchor), Some(cursor)) => PixelRect::between(anchor, cursor),
+            _ => None,
+        };
+        let selection_bounds = selection.and_then(|rect| selection_damage(rect, width, height));
+
         let mut buffer = self
             .surface
             .buffer_mut()
             .map_err(|error| anyhow::anyhow!("could not access the overlay buffer: {error}"))?;
-        draw_source_dimmed(&mut buffer, &self.source, 42);
+
+        // Dragging the selection only touches what it covered before and covers
+        // now. `None` here means the whole surface must be redrawn and presented.
+        let damage = match self.presented_selection.get() {
+            Some(previous) if self.editor.is_none() && buffer.age() > 0 => {
+                Some(union_damage(previous, selection_bounds))
+            }
+            _ => None,
+        };
+        match damage {
+            Some(Some(rect)) => restore_region(&mut buffer, &self.dimmed, width, rect),
+            Some(None) => {}
+            None => buffer.copy_from_slice(&self.dimmed),
+        }
 
         if let Some(editor) = &self.editor {
             let selection = editor
@@ -800,18 +841,22 @@ impl Overlay {
             if let Some(button) = self.hovered_button {
                 draw_tooltip(&mut buffer, width, height, layout, button, button.tooltip());
             }
-        } else if let (Some(anchor), Some(cursor)) = (self.selection_anchor, self.selection_cursor)
-        {
-            if let Some(selection) = PixelRect::between(anchor, cursor) {
-                blit_region_undimmed(&mut buffer, &self.source, selection);
-                draw_border(&mut buffer, width, height, selection, 0x00ffffff);
-                draw_dimensions(&mut buffer, width, height, selection);
-            }
+        } else if let Some(selection) = selection {
+            blit_region_undimmed(&mut buffer, &self.source, selection);
+            draw_border(&mut buffer, width, height, selection, 0x00ffffff);
+            draw_dimensions(&mut buffer, width, height, selection);
         }
 
-        buffer
-            .present()
-            .map_err(|error| anyhow::anyhow!("could not present the overlay: {error}"))?;
+        let presented = match damage {
+            Some(rect) => {
+                let rects: Vec<Rect> = rect.into_iter().filter_map(surface_rect).collect();
+                buffer.present_with_damage(&rects)
+            }
+            None => buffer.present(),
+        };
+        presented.map_err(|error| anyhow::anyhow!("could not present the overlay: {error}"))?;
+        self.presented_selection
+            .set(self.editor.is_none().then_some(selection_bounds));
         Ok(())
     }
 }
@@ -1848,17 +1893,129 @@ fn selection_resize_handle(selection: PixelRect, point: PixelPoint) -> Option<Re
     )
 }
 
+const LATIN_LETTER_KEYS: [(KeyCode, &str); 26] = [
+    (KeyCode::KeyA, "a"),
+    (KeyCode::KeyB, "b"),
+    (KeyCode::KeyC, "c"),
+    (KeyCode::KeyD, "d"),
+    (KeyCode::KeyE, "e"),
+    (KeyCode::KeyF, "f"),
+    (KeyCode::KeyG, "g"),
+    (KeyCode::KeyH, "h"),
+    (KeyCode::KeyI, "i"),
+    (KeyCode::KeyJ, "j"),
+    (KeyCode::KeyK, "k"),
+    (KeyCode::KeyL, "l"),
+    (KeyCode::KeyM, "m"),
+    (KeyCode::KeyN, "n"),
+    (KeyCode::KeyO, "o"),
+    (KeyCode::KeyP, "p"),
+    (KeyCode::KeyQ, "q"),
+    (KeyCode::KeyR, "r"),
+    (KeyCode::KeyS, "s"),
+    (KeyCode::KeyT, "t"),
+    (KeyCode::KeyU, "u"),
+    (KeyCode::KeyV, "v"),
+    (KeyCode::KeyW, "w"),
+    (KeyCode::KeyX, "x"),
+    (KeyCode::KeyY, "y"),
+    (KeyCode::KeyZ, "z"),
+];
+
+/// Keeps letter shortcuts working on non-Latin layouts, where the C key reports
+/// a Cyrillic "с". Latin layouts keep their own letters, so Dvorak is unaffected.
+fn shortcut_key(logical: &Key, physical: PhysicalKey) -> Key {
+    if matches!(logical, Key::Character(value) if !value.is_ascii()) {
+        let letter = LATIN_LETTER_KEYS
+            .iter()
+            .find(|(code, _)| physical == PhysicalKey::Code(*code));
+        if let Some((_, letter)) = letter {
+            return Key::Character((*letter).into());
+        }
+    }
+    logical.clone()
+}
+
 fn character_is(key: &Key, expected: &str) -> bool {
     matches!(key, Key::Character(value) if value.eq_ignore_ascii_case(expected))
 }
 
-fn draw_source_dimmed(buffer: &mut [u32], source: &Frame, brightness: u8) {
-    for (destination, pixel) in buffer.iter_mut().zip(source.rgba().chunks_exact(4)) {
-        let red = u32::from(pixel[0]) * u32::from(brightness) / 100;
-        let green = u32::from(pixel[1]) * u32::from(brightness) / 100;
-        let blue = u32::from(pixel[2]) * u32::from(brightness) / 100;
-        *destination = (red << 16) | (green << 8) | blue;
+fn dimmed_pixels(source: &Frame, brightness: u8) -> Vec<u32> {
+    source
+        .rgba()
+        .chunks_exact(4)
+        .map(|pixel| {
+            let red = u32::from(pixel[0]) * u32::from(brightness) / 100;
+            let green = u32::from(pixel[1]) * u32::from(brightness) / 100;
+            let blue = u32::from(pixel[2]) * u32::from(brightness) / 100;
+            (red << 16) | (green << 8) | blue
+        })
+        .collect()
+}
+
+/// Surface area touched by a selection's fill, border, and dimensions label.
+fn selection_damage(selection: PixelRect, width: u32, height: u32) -> Option<PixelRect> {
+    let (label_x, label_y) = dimensions_label_origin(selection);
+    let left = selection.x.min(label_x).saturating_sub(1).max(0);
+    let top = selection.y.min(label_y).saturating_sub(1).max(0);
+    let right = selection
+        .right()
+        .max(label_x.saturating_add(DIMENSIONS_LABEL_WIDTH))
+        .saturating_add(1)
+        .min(i32::try_from(width).unwrap_or(i32::MAX));
+    let bottom = selection
+        .bottom()
+        .max(label_y.saturating_add(DIMENSIONS_LABEL_HEIGHT))
+        .saturating_add(1)
+        .min(i32::try_from(height).unwrap_or(i32::MAX));
+    Some(PixelRect {
+        x: left,
+        y: top,
+        width: u32::try_from(right.checked_sub(left)?)
+            .ok()
+            .filter(|w| *w > 0)?,
+        height: u32::try_from(bottom.checked_sub(top)?)
+            .ok()
+            .filter(|h| *h > 0)?,
+    })
+}
+
+fn union_damage(first: Option<PixelRect>, second: Option<PixelRect>) -> Option<PixelRect> {
+    match (first, second) {
+        (Some(first), Some(second)) => {
+            let x = first.x.min(second.x);
+            let y = first.y.min(second.y);
+            Some(PixelRect {
+                x,
+                y,
+                width: u32::try_from(first.right().max(second.right()) - x).ok()?,
+                height: u32::try_from(first.bottom().max(second.bottom()) - y).ok()?,
+            })
+        }
+        (rect, None) | (None, rect) => rect,
     }
+}
+
+/// Copies a rectangle already clamped to the surface from `source` into `buffer`.
+fn restore_region(buffer: &mut [u32], source: &[u32], stride: u32, rect: PixelRect) {
+    let stride = usize::try_from(stride).unwrap_or_default();
+    let left = usize::try_from(rect.x).unwrap_or_default();
+    let top = usize::try_from(rect.y).unwrap_or_default();
+    let columns = usize::try_from(rect.width).unwrap_or_default();
+    let rows = usize::try_from(rect.height).unwrap_or_default();
+    for row in top..top + rows {
+        let start = row * stride + left;
+        buffer[start..start + columns].copy_from_slice(&source[start..start + columns]);
+    }
+}
+
+fn surface_rect(rect: PixelRect) -> Option<Rect> {
+    Some(Rect {
+        x: u32::try_from(rect.x).ok()?,
+        y: u32::try_from(rect.y).ok()?,
+        width: NonZeroU32::new(rect.width)?,
+        height: NonZeroU32::new(rect.height)?,
+    })
 }
 
 fn blit_region_undimmed(buffer: &mut [u32], source: &Frame, region: PixelRect) {
@@ -1923,19 +2080,25 @@ fn draw_border(buffer: &mut [u32], width: u32, height: u32, rect: PixelRect, col
     draw_line(buffer, width, height, left, bottom, left, top, color, 1);
 }
 
+fn dimensions_label_origin(rect: PixelRect) -> (i32, i32) {
+    let x = rect
+        .right()
+        .saturating_sub(DIMENSIONS_LABEL_WIDTH)
+        .max(rect.x)
+        .max(0);
+    (x, rect.y.max(0))
+}
+
 fn draw_dimensions(buffer: &mut [u32], width: u32, height: u32, rect: PixelRect) {
-    let label_width = 82;
-    let label_height = 20;
-    let x = rect.right().saturating_sub(label_width).max(rect.x).max(0);
-    let y = rect.y.max(0);
+    let (x, y) = dimensions_label_origin(rect);
     fill_rect(
         buffer,
         width,
         height,
         x,
         y,
-        label_width,
-        label_height,
+        DIMENSIONS_LABEL_WIDTH,
+        DIMENSIONS_LABEL_HEIGHT,
         0x00_15171d,
     );
     let text = format!("{}x{}", rect.width, rect.height);
@@ -3182,6 +3345,78 @@ fn glyph(character: char) -> [u8; 7] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn pixel_rect(x: i32, y: i32, width: u32, height: u32) -> PixelRect {
+        PixelRect {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+
+    #[test]
+    fn shortcut_key_maps_non_latin_letters_to_their_physical_key() {
+        let cyrillic = Key::Character("с".into());
+        let key = shortcut_key(&cyrillic, PhysicalKey::Code(KeyCode::KeyC));
+        assert!(character_is(&key, "c"));
+    }
+
+    #[test]
+    fn shortcut_key_keeps_latin_layouts_and_named_keys() {
+        // On Dvorak the physical C key produces "j" and must stay "j".
+        let dvorak = Key::Character("j".into());
+        let key = shortcut_key(&dvorak, PhysicalKey::Code(KeyCode::KeyC));
+        assert!(character_is(&key, "j"));
+
+        let escape = Key::Named(NamedKey::Escape);
+        let key = shortcut_key(&escape, PhysicalKey::Code(KeyCode::Escape));
+        assert!(matches!(key, Key::Named(NamedKey::Escape)));
+    }
+
+    #[test]
+    fn dimmed_pixels_scale_each_channel_into_surface_format() {
+        let frame = Frame::new(PhysicalPoint::default(), 1, 1, vec![100, 50, 200, 255]).unwrap();
+        assert_eq!(
+            dimmed_pixels(&frame, 50),
+            vec![(50 << 16) | (25 << 8) | 100]
+        );
+    }
+
+    #[test]
+    fn selection_damage_covers_the_label_of_a_narrow_selection() {
+        let damage = selection_damage(pixel_rect(100, 100, 10, 10), 1000, 1000).unwrap();
+        assert_eq!(damage, pixel_rect(99, 99, 84, 22));
+    }
+
+    #[test]
+    fn selection_damage_stays_inside_the_surface() {
+        let damage = selection_damage(pixel_rect(950, 980, 100, 50), 1000, 1000).unwrap();
+        assert_eq!(damage, pixel_rect(949, 979, 51, 21));
+        let corner = selection_damage(pixel_rect(0, 0, 1000, 1000), 1000, 1000).unwrap();
+        assert_eq!(corner, pixel_rect(0, 0, 1000, 1000));
+    }
+
+    #[test]
+    fn union_damage_merges_and_passes_through_missing_rects() {
+        let first = pixel_rect(10, 20, 5, 5);
+        let second = pixel_rect(0, 22, 5, 10);
+        assert_eq!(
+            union_damage(Some(first), Some(second)),
+            Some(pixel_rect(0, 20, 15, 12))
+        );
+        assert_eq!(union_damage(None, Some(second)), Some(second));
+        assert_eq!(union_damage(Some(first), None), Some(first));
+        assert_eq!(union_damage(None, None), None);
+    }
+
+    #[test]
+    fn restore_region_copies_only_the_rectangle() {
+        let source = vec![7_u32; 12];
+        let mut buffer = vec![0_u32; 12];
+        restore_region(&mut buffer, &source, 4, pixel_rect(1, 1, 2, 2));
+        assert_eq!(buffer, vec![0, 0, 0, 0, 0, 7, 7, 0, 0, 7, 7, 0]);
+    }
     use rustshot::annotation::flatten;
 
     fn test_editor() -> Editor {

@@ -399,12 +399,13 @@ impl RustshotApp {
             }
             OverlayOutcome::Copy(frame) => {
                 self.set_overlay_visible(false);
+                let allow_history = self.config.clipboard_history;
                 let result = self
                     .overlay
                     .as_ref()
                     .context("region editor window no longer exists")
                     .and_then(|overlay| overlay.owner_hwnd())
-                    .and_then(|owner| copy_to_clipboard_with_owner(&frame, owner));
+                    .and_then(|owner| copy_to_clipboard_with_owner(&frame, owner, allow_history));
                 match result {
                     Ok(()) => {
                         self.remember_overlay_preferences();
@@ -431,12 +432,13 @@ impl RustshotApp {
 
     fn finish_region_automatically(&mut self, frame: Frame) {
         if self.config.region_auto_copy {
+            let allow_history = self.config.clipboard_history;
             let result = self
                 .overlay
                 .as_ref()
                 .context("region selection window no longer exists")
                 .and_then(|overlay| overlay.owner_hwnd())
-                .and_then(|owner| copy_to_clipboard_with_owner(&frame, owner));
+                .and_then(|owner| copy_to_clipboard_with_owner(&frame, owner, allow_history));
             if let Err(error) = result {
                 show_error("Could not copy screenshot", &error.to_string());
                 return;

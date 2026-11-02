@@ -6,12 +6,15 @@ use std::{mem::size_of, ptr, slice, thread, time::Duration};
 
 use anyhow::{bail, Context, Result};
 use windows::{
-    core::Error as WindowsError,
+    core::{w, Error as WindowsError, PCWSTR},
     Win32::{
         Foundation::{GlobalFree, HANDLE, HGLOBAL, HWND},
         Graphics::Gdi::{BITMAPV5HEADER, BI_BITFIELDS},
         System::{
-            DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData},
+            DataExchange::{
+                CloseClipboard, EmptyClipboard, OpenClipboard, RegisterClipboardFormatW,
+                SetClipboardData,
+            },
             Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE},
             Ole::CF_DIBV5,
         },
@@ -27,7 +30,10 @@ const LCS_SRGB: u32 = 0x7352_4742;
 const LCS_GM_IMAGES: u32 = 4;
 
 /// Copies a frame to the Windows clipboard using a real Rustshot owner window.
-pub fn copy_to_clipboard_with_owner(frame: &Frame, owner: HWND) -> Result<()> {
+///
+/// Cloud clipboard sync is always refused. `allow_history` controls whether the
+/// screenshot may appear in the local Win+V history.
+pub fn copy_to_clipboard_with_owner(frame: &Frame, owner: HWND, allow_history: bool) -> Result<()> {
     if owner.is_invalid() {
         bail!("clipboard owner window is invalid");
     }
@@ -36,6 +42,10 @@ pub fn copy_to_clipboard_with_owner(frame: &Frame, owner: HWND) -> Result<()> {
 
     // SAFETY: the guard proves that this thread currently has the clipboard open.
     unsafe { EmptyClipboard() }.context("failed to empty the Windows clipboard")?;
+
+    // These go first so a failure leaves no image on the clipboard unprotected.
+    set_policy_format(w!("CanUploadToCloudClipboard"), false)?;
+    set_policy_format(w!("CanIncludeInClipboardHistory"), allow_history)?;
 
     let handle = dib
         .handle
@@ -46,6 +56,41 @@ pub fn copy_to_clipboard_with_owner(frame: &Frame, owner: HWND) -> Result<()> {
     unsafe { SetClipboardData(u32::from(CF_DIBV5.0), Some(HANDLE(handle.0))) }
         .context("failed to place the screenshot on the Windows clipboard")?;
     dib.release();
+    Ok(())
+}
+
+/// Places a documented clipboard policy format holding a single DWORD. The
+/// clipboard must be open on this thread.
+fn set_policy_format(name: PCWSTR, allowed: bool) -> Result<()> {
+    // SAFETY: `name` is a valid null-terminated string from the `w!` macro.
+    let format = unsafe { RegisterClipboardFormatW(name) };
+    if format == 0 {
+        return Err(WindowsError::from_thread()).context("failed to register a clipboard format");
+    }
+
+    // SAFETY: the allocation is managed by `OwnedGlobalMemory` until Windows owns it.
+    let memory = unsafe { GlobalAlloc(GMEM_MOVEABLE, size_of::<u32>()) }
+        .context("failed to allocate clipboard memory")?;
+    let mut memory = OwnedGlobalMemory::new(memory);
+
+    // SAFETY: the handle is valid movable global memory allocated above.
+    let base = unsafe { GlobalLock(memory.handle()) }.cast::<u32>();
+    if base.is_null() {
+        return Err(WindowsError::from_thread()).context("failed to lock clipboard memory");
+    }
+    // SAFETY: `base` addresses at least one writable, suitably aligned u32, and
+    // the unlock balances the successful `GlobalLock` above. See `create_dibv5`
+    // for why the unlock result is ignored.
+    unsafe {
+        ptr::write(base, u32::from(allowed));
+        let _ = GlobalUnlock(memory.handle());
+    }
+
+    // SAFETY: the payload is valid and the clipboard is open. On success Windows
+    // assumes ownership, and `release` prevents a second free from Rust.
+    unsafe { SetClipboardData(format, Some(HANDLE(memory.handle().0))) }
+        .context("failed to place a clipboard policy format")?;
+    memory.release();
     Ok(())
 }
 
@@ -195,7 +240,7 @@ mod tests {
     #[test]
     fn rejects_a_null_owner_without_touching_the_clipboard() {
         let frame = Frame::new(PhysicalPoint::default(), 1, 1, vec![0, 0, 0, 255]).unwrap();
-        let error = copy_to_clipboard_with_owner(&frame, HWND::default()).unwrap_err();
+        let error = copy_to_clipboard_with_owner(&frame, HWND::default(), false).unwrap_err();
         assert!(error.to_string().contains("owner window is invalid"));
     }
 }

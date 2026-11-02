@@ -7,7 +7,7 @@ use std::{
     sync::{Arc, Mutex, OnceLock},
 };
 
-use fontdue::{Font, FontSettings, Metrics};
+use ab_glyph::{Font as _, FontVec, PxScale, ScaleFont as _};
 use thiserror::Error;
 use tiny_skia::{
     Color as SkiaColor, LineCap, LineJoin, Paint, Path, PathBuilder, Pixmap, Rect, Stroke,
@@ -1242,9 +1242,22 @@ fn pixelate_effect(rgba: &mut [u8], width: u32, height: u32, effect: RegionEffec
     }
 }
 
-static UI_FONT: OnceLock<Option<Font>> = OnceLock::new();
+// The font file and glyph cache live only while an overlay is open. The outer
+// `None` means not loaded; the inner one means no usable font exists.
+static UI_FONT: Mutex<Option<Option<Arc<FontVec>>>> = Mutex::new(None);
 static GLYPH_CACHE: OnceLock<Mutex<HashMap<(char, u16), CachedGlyph>>> = OnceLock::new();
 const MAX_CACHED_GLYPHS: usize = 2048;
+
+/// Placement of a glyph bitmap. `ymin` is the bitmap bottom's distance above the
+/// baseline, so its top row is at `baseline - height - ymin`.
+#[derive(Clone, Copy)]
+struct Metrics {
+    xmin: i32,
+    ymin: i32,
+    width: usize,
+    height: usize,
+    advance_width: f32,
+}
 
 #[derive(Clone)]
 struct CachedGlyph {
@@ -1252,7 +1265,57 @@ struct CachedGlyph {
     bitmap: Arc<[u8]>,
 }
 
-fn rasterized_glyph(font: &Font, character: char, size: f32) -> CachedGlyph {
+/// Converts an em size to `ab_glyph`'s scale, which is relative to the font's
+/// ascent-to-descent height.
+fn em_scale(font: &FontVec, size: f32) -> PxScale {
+    let units_per_em = font.units_per_em().unwrap_or(font.height_unscaled());
+    PxScale::from(size * font.height_unscaled() / units_per_em)
+}
+
+fn advance_width(font: &FontVec, character: char, size: f32) -> f32 {
+    font.as_scaled(em_scale(font, size))
+        .h_advance(font.glyph_id(character))
+}
+
+fn horizontal_kern(font: &FontVec, first: char, second: char, size: f32) -> f32 {
+    font.as_scaled(em_scale(font, size))
+        .kern(font.glyph_id(first), font.glyph_id(second))
+}
+
+fn rasterize(font: &FontVec, character: char, size: f32) -> (Metrics, Vec<u8>) {
+    let scaled = font.as_scaled(em_scale(font, size));
+    let advance_width = scaled.h_advance(font.glyph_id(character));
+    let Some(outline) = font.outline_glyph(scaled.scaled_glyph(character)) else {
+        let metrics = Metrics {
+            xmin: 0,
+            ymin: 0,
+            width: 0,
+            height: 0,
+            advance_width,
+        };
+        return (metrics, Vec::new());
+    };
+    let bounds = outline.px_bounds();
+    let width = bounds.width() as usize;
+    let height = bounds.height() as usize;
+    let mut bitmap = vec![0_u8; width * height];
+    outline.draw(|x, y, coverage| {
+        let index = y as usize * width + x as usize;
+        if let Some(pixel) = bitmap.get_mut(index) {
+            *pixel = (coverage.clamp(0.0, 1.0) * 255.0).round() as u8;
+        }
+    });
+    let metrics = Metrics {
+        xmin: bounds.min.x as i32,
+        ymin: -(bounds.max.y as i32),
+        width,
+        height,
+        advance_width,
+    };
+    (metrics, bitmap)
+}
+
+fn rasterized_glyph(font: &FontVec, character: char, size: f32) -> CachedGlyph {
     let key = (
         character,
         (size * 10.0).round().clamp(0.0, u16::MAX as f32) as u16,
@@ -1264,7 +1327,7 @@ fn rasterized_glyph(font: &Font, character: char, size: f32) -> CachedGlyph {
     if let Some(glyph) = cache.get(&key) {
         return glyph.clone();
     }
-    let (metrics, bitmap) = font.rasterize(character, size);
+    let (metrics, bitmap) = rasterize(font, character, size);
     let glyph = CachedGlyph {
         metrics,
         bitmap: Arc::from(bitmap),
@@ -1275,27 +1338,44 @@ fn rasterized_glyph(font: &Font, character: char, size: f32) -> CachedGlyph {
     glyph
 }
 
-fn ui_font() -> Option<&'static Font> {
+fn load_ui_font() -> Option<Arc<FontVec>> {
+    let candidates: &[&FilePath] = if cfg!(windows) {
+        &[
+            FilePath::new(r"C:\Windows\Fonts\segoeui.ttf"),
+            FilePath::new(r"C:\Windows\Fonts\arial.ttf"),
+        ]
+    } else {
+        &[
+            FilePath::new("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+            FilePath::new("/System/Library/Fonts/Helvetica.ttc"),
+        ]
+    };
+    candidates.iter().find_map(|path| {
+        fs::read(path)
+            .ok()
+            .and_then(|bytes| FontVec::try_from_vec(bytes).ok())
+            .map(Arc::new)
+    })
+}
+
+fn ui_font() -> Option<Arc<FontVec>> {
     UI_FONT
-        .get_or_init(|| {
-            let candidates: &[&FilePath] = if cfg!(windows) {
-                &[
-                    FilePath::new(r"C:\Windows\Fonts\segoeui.ttf"),
-                    FilePath::new(r"C:\Windows\Fonts\arial.ttf"),
-                ]
-            } else {
-                &[
-                    FilePath::new("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
-                    FilePath::new("/System/Library/Fonts/Helvetica.ttc"),
-                ]
-            };
-            candidates.iter().find_map(|path| {
-                fs::read(path)
-                    .ok()
-                    .and_then(|bytes| Font::from_bytes(bytes, FontSettings::default()).ok())
-            })
-        })
-        .as_ref()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get_or_insert_with(load_ui_font)
+        .clone()
+}
+
+/// Frees the UI font and rasterized glyphs. The next text operation reloads them.
+pub fn release_ui_font() {
+    *UI_FONT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+    if let Some(cache) = GLYPH_CACHE.get() {
+        *cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = HashMap::new();
+    }
 }
 
 /// Measures text using the lazily loaded system UI font.
@@ -1320,11 +1400,9 @@ pub fn measure_text(text: &str, size: f32) -> (u32, u32) {
         let mut previous = None;
         for character in line.chars() {
             if let Some(previous) = previous {
-                width += font
-                    .horizontal_kern(previous, character, size)
-                    .unwrap_or(0.0);
+                width += horizontal_kern(&font, previous, character, size);
             }
-            width += font.metrics(character, size).advance_width;
+            width += advance_width(&font, character, size);
             previous = Some(character);
         }
         maximum = maximum.max(width);
@@ -1357,11 +1435,9 @@ pub fn draw_text_rgba(
         let mut previous = None;
         for character in line.chars() {
             if let Some(previous) = previous {
-                cursor_x += font
-                    .horizontal_kern(previous, character, size)
-                    .unwrap_or(0.0);
+                cursor_x += horizontal_kern(&font, previous, character, size);
             }
-            let glyph = rasterized_glyph(font, character, size);
+            let glyph = rasterized_glyph(&font, character, size);
             let metrics = glyph.metrics;
             let bitmap = &glyph.bitmap;
             let draw_x = cursor_x.round() as i32 + metrics.xmin;
@@ -1417,11 +1493,9 @@ pub fn draw_text_bgrx(
         let mut previous = None;
         for character in line.chars() {
             if let Some(previous) = previous {
-                cursor_x += font
-                    .horizontal_kern(previous, character, size)
-                    .unwrap_or(0.0);
+                cursor_x += horizontal_kern(&font, previous, character, size);
             }
-            let glyph = rasterized_glyph(font, character, size);
+            let glyph = rasterized_glyph(&font, character, size);
             let metrics = glyph.metrics;
             let bitmap = &glyph.bitmap;
             let draw_x = cursor_x.round() as i32 + metrics.xmin;
@@ -1604,6 +1678,19 @@ mod tests {
 
     #[test]
     fn text_measurement_is_nonempty_and_multiline() {
+        // Cap height is about 0.7 em, so this catches a scale taken from the
+        // font's line height instead of its em size.
+        if let Some(font) = ui_font() {
+            let (metrics, bitmap) = rasterize(&font, 'H', 40.0);
+            assert!((24..=32).contains(&metrics.height), "{}", metrics.height);
+            assert_eq!(bitmap.len(), metrics.width * metrics.height);
+            assert_eq!(metrics.ymin, 0);
+        }
+
+        let before_release = measure_text("Rustshot", 18.0);
+        release_ui_font();
+        assert_eq!(measure_text("Rustshot", 18.0), before_release);
+
         let single = measure_text("Rustshot", 18.0);
         let multiline = measure_text("Rustshot\nFast", 18.0);
         assert!(single.0 > 0 && single.1 > 0);

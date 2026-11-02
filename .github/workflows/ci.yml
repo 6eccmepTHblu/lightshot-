@@ -28,6 +28,7 @@ jobs:
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked --all-targets
       - run: cargo build --release --locked
+      - run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-no-network.ps1
 
   dependencies:
     runs-on: ubuntu-latest

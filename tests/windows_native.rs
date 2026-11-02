@@ -13,9 +13,20 @@ use rustshot::{
         clipboard::copy_to_clipboard_with_owner,
     },
 };
-use windows::Win32::{
-    System::{DataExchange::IsClipboardFormatAvailable, Ole::CF_DIBV5},
-    UI::WindowsAndMessaging::GetDesktopWindow,
+use windows::{
+    core::{w, PCWSTR},
+    Win32::{
+        Foundation::{HGLOBAL, HWND},
+        System::{
+            DataExchange::{
+                CloseClipboard, GetClipboardData, IsClipboardFormatAvailable, OpenClipboard,
+                RegisterClipboardFormatW,
+            },
+            Memory::{GlobalLock, GlobalUnlock},
+            Ole::CF_DIBV5,
+        },
+        UI::WindowsAndMessaging::GetDesktopWindow,
+    },
 };
 
 #[test]
@@ -59,7 +70,33 @@ fn clipboard_export_publishes_a_dibv5_image() {
     // SAFETY: GetDesktopWindow returns a process-independent, always-valid desktop HWND.
     let owner = unsafe { GetDesktopWindow() };
 
-    copy_to_clipboard_with_owner(&frame, owner).expect("clipboard copy should succeed");
-    // SAFETY: this call only queries format availability and owns no resources.
-    assert!(unsafe { IsClipboardFormatAvailable(u32::from(CF_DIBV5.0)) }.is_ok());
+    for allow_history in [false, true] {
+        copy_to_clipboard_with_owner(&frame, owner, allow_history)
+            .expect("clipboard copy should succeed");
+        // SAFETY: this call only queries format availability and owns no resources.
+        assert!(unsafe { IsClipboardFormatAvailable(u32::from(CF_DIBV5.0)) }.is_ok());
+        assert_eq!(
+            read_policy_format(owner, w!("CanUploadToCloudClipboard")),
+            0
+        );
+        assert_eq!(
+            read_policy_format(owner, w!("CanIncludeInClipboardHistory")),
+            u32::from(allow_history)
+        );
+    }
+}
+
+fn read_policy_format(owner: HWND, name: PCWSTR) -> u32 {
+    // SAFETY: `name` is a valid null-terminated string, the clipboard stays open
+    // while its handle is read, and the lock is balanced before closing.
+    unsafe {
+        let format = RegisterClipboardFormatW(name);
+        OpenClipboard(Some(owner)).expect("clipboard should open");
+        let handle = GetClipboardData(format).expect("policy format should be present");
+        let memory = HGLOBAL(handle.0);
+        let value = *GlobalLock(memory).cast::<u32>();
+        let _ = GlobalUnlock(memory);
+        CloseClipboard().expect("clipboard should close");
+        value
+    }
 }

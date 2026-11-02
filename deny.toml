@@ -3,7 +3,7 @@ targets = ["x86_64-pc-windows-msvc"]
 
 [advisories]
 ignore = [
-    { id = "RUSTSEC-2026-0192", reason = "ttf-parser is pulled in by fontdue; this is an unmaintained notice rather than a vulnerability, and no safe upgrade is available. Reassess or replace fontdue before the public 1.0 release." },
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser is pulled in by ab_glyph; this is an unmaintained notice rather than a vulnerability, and no safe upgrade is available." },
 ]
 
 [licenses]
@@ -24,7 +24,31 @@ allow = [
 multiple-versions = "warn"
 wildcards = "deny"
 highlight = "all"
-deny = []
+# The app never talks to the network. Anything that could is a build failure.
+deny = [
+    { crate = "attohttpc" },
+    { crate = "curl" },
+    { crate = "h2" },
+    { crate = "http" },
+    { crate = "hyper" },
+    { crate = "isahc" },
+    { crate = "mio" },
+    { crate = "native-tls" },
+    { crate = "openssl" },
+    { crate = "reqwest" },
+    { crate = "ring" },
+    { crate = "rustls" },
+    { crate = "self_update" },
+    { crate = "sentry" },
+    { crate = "socket2" },
+    { crate = "surf" },
+    { crate = "tokio" },
+    { crate = "tungstenite" },
+    { crate = "ureq" },
+    { crate = "webview2" },
+    { crate = "webview2-com" },
+    { crate = "wry" },
+]
 skip = []
 
 [sources]

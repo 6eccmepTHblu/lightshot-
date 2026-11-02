@@ -60,6 +60,8 @@ pub struct Config {
     pub region_auto_copy: bool,
     /// Save a selected region immediately instead of opening the editor.
     pub region_autosave: bool,
+    /// Allow copied screenshots in the local Win+V history. Cloud sync is always refused.
+    pub clipboard_history: bool,
     /// Tool restored when the next region editor opens.
     pub last_editor_tool: EditorTool,
     /// Opaque annotation color restored by the region editor.
@@ -227,6 +229,7 @@ impl Default for Config {
             include_cursor: true,
             region_auto_copy: false,
             region_autosave: false,
+            clipboard_history: false,
             last_editor_tool: EditorTool::default(),
             editor_color: RgbColor::default(),
             editor_stroke_width: 1,
@@ -740,6 +743,7 @@ mod tests {
             include_cursor: false,
             region_auto_copy: true,
             region_autosave: true,
+            clipboard_history: true,
             last_editor_tool: EditorTool::Callout,
             editor_color: RgbColor::new(12, 34, 56),
             editor_stroke_width: 3,
