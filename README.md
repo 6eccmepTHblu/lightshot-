@@ -1,145 +1,147 @@
 <p align="center">
-  <img src="assets/rustshot-logo-light.png" alt="RustShot logo" width="420">
+  <img src="assets/rustshot-logo-light.png" alt="Логотип RustShot" width="420">
 </p>
 
 <p align="center">
-  <a href="https://github.com/CodyKoInABox/rustshot/actions/workflows/ci.yml"><img src="https://github.com/CodyKoInABox/rustshot/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
-  <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4" alt="Windows 10 and 11">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-orange" alt="MIT license"></a>
+  <a href="https://github.com/CodyKoInABox/rustshot/actions/workflows/ci.yml"><img src="https://github.com/CodyKoInABox/rustshot/actions/workflows/ci.yml/badge.svg" alt="Статус CI"></a>
+  <img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4" alt="Windows 10 и 11">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-orange" alt="Лицензия MIT"></a>
 </p>
 
-RustShot is a fast, lightweight screenshot and annotation tool for Windows. It combines familiar
-region capture with a native editor, configurable global shortcuts, automatic workflows, and
-low-overhead tray operation.
+RustShot — быстрый и лёгкий инструмент для создания снимков экрана и пометок на них в Windows. Он
+сочетает привычный выбор области с нативным редактором, настраиваемыми глобальными горячими
+клавишами, автоматическими сценариями и работой в трее с минимальной нагрузкой на систему.
 
-**[Visit the RustShot website](https://codykoinabox.github.io/rustshot/)**
+**[Перейти на сайт RustShot](https://codykoinabox.github.io/rustshot/)**
 
-## RustShot vs. Lightshot
+## RustShot и Lightshot
 
-- **86.46% less RAM**
-- **64.76% faster startup**
-- **70.61% faster copying**
-- **45.49% faster screenshot activation**
+- **На 86,46 % меньше оперативной памяти**
+- **На 64,76 % быстрее запуск**
+- **На 70,61 % быстрее копирование**
+- **На 45,49 % быстрее открытие выбора области**
 
-[See the full benchmark.](benchmarks/reports/20260802-112030.md)
+[Полные результаты бенчмарка.](benchmarks/reports/20260802-112030.md)
 
-## Download
+## Загрузка
 
-RustShot is distributed through [GitHub Releases](https://github.com/CodyKoInABox/rustshot/releases)
-as a portable 64-bit Windows application. No installer is required: extract the ZIP and run
-`rustshot.exe` on Windows 10 or Windows 11.
+RustShot распространяется через [GitHub Releases](https://github.com/CodyKoInABox/rustshot/releases)
+как портативное 64-разрядное приложение для Windows. Установка не нужна: распакуйте ZIP-архив и
+запустите `rustshot.exe` в Windows 10 или Windows 11.
 
-## Highlights
+## Основные возможности
 
-- Full-screen capture for the monitor under the pointer or the complete virtual desktop.
-- Resizable region selection with move and edge controls.
-- Pen, highlighter, line, arrow, rectangle, ellipse, text, and callout tools.
-- Secure redaction, pixelation, crop, object editing, and undo/redo.
-- Lossless clipboard export, PNG/JPEG saving, and native printing.
-- Optional automatic copy and automatic save after region selection.
-- Configurable global shortcuts and remembered editor preferences.
-- Native Windows interface with no browser or webview runtime.
-- Local-only operation with no telemetry or upload service.
+- Снимок всего экрана: монитора под курсором или всего виртуального рабочего стола.
+- Выбор области с возможностью перемещения и изменения размера.
+- Инструменты: перо, маркер, линия, стрелка, прямоугольник, эллипс, текст и выноска.
+- Надёжное закрашивание, пикселизация, обрезка, редактирование объектов, отмена и повтор.
+- Копирование в буфер обмена без потерь, сохранение в PNG и JPEG, нативная печать.
+- Автоматическое копирование и сохранение после выбора области, если нужно.
+- Настраиваемые глобальные горячие клавиши и запоминание настроек редактора.
+- Нативный интерфейс Windows без браузера и среды WebView.
+- Только локальная работа: без телеметрии и сервисов загрузки.
 
-## Quick start
+## Быстрый старт
 
-RustShot starts in the system tray. The default shortcuts are:
+RustShot запускается в трее. Горячие клавиши по умолчанию:
 
-| Shortcut | Action |
+| Сочетание | Действие |
 | --- | --- |
-| `Print Screen` | Select and edit a region |
-| `Ctrl+Shift+F11` | Capture and save the current monitor |
+| `Print Screen` | Выбрать и отредактировать область |
+| `Ctrl+Shift+F11` | Снять и сохранить текущий монитор |
 
-Windows 11 can reserve `Print Screen` for its own screen capture. If it does, turn off **Use the
-Print Screen key to open screen capture** under Settings > Accessibility > Keyboard, or choose
-another shortcut in RustShot's settings.
+Windows 11 может использовать `Print Screen` для собственного захвата экрана. В этом случае
+отключите использование клавиши Print Screen для открытия захвата экрана в разделе «Параметры >
+Специальные возможности > Клавиатура» или выберите другое сочетание в настройках RustShot.
 
-The tray menu provides capture commands, the screenshots folder, settings, diagnostics, and quit.
-Shortcuts, output format, monitor scope, cursor capture, automatic copy, and automatic save are all
-configurable from **Settings**.
+В меню значка в трее есть команды снимка, папка со снимками, настройки, диагностика и выход. Горячие
+клавиши, формат файла, область снимка экрана, показ курсора, автоматическое копирование и сохранение
+меняются в разделе **Настройки**.
 
-## Region editor
+## Редактор области
 
-After selecting a region, annotations remain editable until export.
+После выбора области пометки можно редактировать до самого экспорта.
 
-| Key | Action |
+| Клавиша | Действие |
 | --- | --- |
-| `V` | Select, move, resize, or restyle an object |
-| `P`, `H`, `L`, `A` | Pen, highlighter, line, arrow |
-| `R`, `E` | Rectangle, ellipse |
-| `T`, `Q` | Text box, callout; `Shift+Enter` inserts a line break |
-| `B`, `M` | Secure redaction, pixelation |
-| `D` / `Delete` | Delete the object under the pointer or selected object |
-| `G` | Crop the captured region |
-| `I`, `K` | Eyedropper, custom color picker |
-| `U` / `Ctrl+Z` | Undo |
-| `Y` / `Ctrl+Y` | Redo |
-| `X` | Clear annotations |
-| `S` / `Ctrl+S` | Save As |
-| `C` / `Ctrl+C` | Copy |
-| `O` | Print |
-| `Enter` | Copy |
-| `Escape` | Cancel the active edit or capture |
+| `V` | Выбрать, переместить объект, изменить его размер или стиль |
+| `P`, `H`, `L`, `A` | Перо, маркер, линия, стрелка |
+| `R`, `E` | Прямоугольник, эллипс |
+| `T`, `Q` | Текст, выноска; `Shift+Enter` переносит строку |
+| `B`, `M` | Надёжное закрашивание, пикселизация |
+| `D` / `Delete` | Удалить объект под курсором или выбранный объект |
+| `G` | Обрезать снятую область |
+| `I`, `K` | Пипетка, выбор своего цвета |
+| `U` / `Ctrl+Z` | Отменить |
+| `Y` / `Ctrl+Y` | Повторить |
+| `X` | Удалить все пометки |
+| `S` / `Ctrl+S` | Сохранить как |
+| `C` / `Ctrl+C` | Копировать |
+| `O` | Печать |
+| `Enter` | Копировать |
+| `Escape` | Отменить текущее действие или снимок |
 
-Secure redaction is flattened into opaque black pixels in the exported image. Pixelation is also
-applied directly to exported pixels rather than stored as a removable overlay.
+Надёжное закрашивание необратимо превращается в непрозрачные чёрные пиксели экспортированного
+изображения. Пикселизация тоже применяется прямо к пикселям, а не хранится отдельным съёмным слоем.
 
-## Settings and files
+## Настройки и файлы
 
-RustShot stores its configuration and bounded diagnostic log in the current Windows user's
-application configuration directory. Screenshots are never included in logs.
+RustShot хранит настройки и журнал диагностики ограниченного размера в папке настроек приложений
+текущего пользователя Windows. Снимки экрана никогда не попадают в журналы.
 
-Supported settings include:
+Можно настроить:
 
-- independent full-screen and region shortcuts;
-- current-monitor or virtual-desktop capture;
-- optional cursor inclusion;
-- PNG compression and JPEG quality;
-- automatic region copy and save;
-- autosave destination; and
-- last-used editor tool, color, and stroke width.
+- отдельные сочетания для снимка всего экрана и выбора области;
+- снимок текущего монитора или всего виртуального рабочего стола;
+- показ курсора на снимке;
+- сжатие PNG и качество JPEG;
+- автоматическое копирование и сохранение области;
+- папку автосохранения;
+- последний использованный инструмент, цвет и толщину линии в редакторе.
 
-The **Create diagnostic report** tray command produces a reviewable text report containing version,
-architecture, relevant settings, paths, and recent errors.
+Команда **Создать диагностический отчёт** в меню значка создаёт текстовый отчёт, который можно
+просмотреть перед отправкой. В нём указаны версия, архитектура, значимые настройки, пути и недавние
+ошибки.
 
-## Performance
+## Производительность
 
-The repository includes a repeatable, black-box Windows benchmark against Lightshot. In the
-published 30-iteration run, both applications completed every measured trial successfully:
+В репозитории есть воспроизводимый бенчмарк для Windows, который сравнивает приложение с Lightshot
+по принципу чёрного ящика. В опубликованном прогоне из 30 итераций оба приложения успешно завершили
+все измеренные попытки:
 
-| Metric | Lightshot | RustShot |
+| Показатель | Lightshot | RustShot |
 | --- | ---: | ---: |
-| Overlay activation, median | 94.46 ms | 51.49 ms |
-| Overlay activation, p95 | 100.24 ms | 62.86 ms |
-| Copy completion, median | 122.16 ms | 35.90 ms |
-| Private memory | 20.91 MiB | 2.83 MiB |
+| Открытие выбора области, медиана | 94,46 мс | 51,49 мс |
+| Открытие выбора области, p95 | 100,24 мс | 62,86 мс |
+| Завершение копирования, медиана | 122,16 мс | 35,90 мс |
+| Приватная память | 20,91 МиБ | 2,83 МиБ |
 
-Results are specific to the recorded machine and configuration. The complete methodology and
-environment are available in the [benchmark report](benchmarks/reports/20260802-112030.md).
+Результаты относятся только к конкретной машине и конфигурации из отчёта. Полная методика и описание
+окружения приведены в [отчёте о бенчмарке](benchmarks/reports/20260802-112030.md).
 
-## Build from source
+## Сборка из исходников
 
-Requirements:
+Требования:
 
-- 64-bit Windows 10 or Windows 11
-- Rust 1.88 or newer
-- Visual Studio Build Tools with the **Desktop development with C++** workload
+- 64-разрядная Windows 10 или Windows 11
+- Rust 1.88 или новее
+- Visual Studio Build Tools с рабочей нагрузкой **Разработка классических приложений на C++**
 
 ```powershell
 cargo build --release --locked
 .\target\release\rustshot.exe
 ```
 
-## Project information
+## О проекте
 
-- [Website](https://codykoinabox.github.io/rustshot/)
-- [Changelog](CHANGELOG.md)
-- [Support and diagnostics](SUPPORT.md)
-- [Security policy](SECURITY.md)
-- [Contributing](CONTRIBUTING.md)
-- [Architecture](ARCHITECTURE.md)
-- [Brand assets](BRANDING.md)
+- [Сайт](https://codykoinabox.github.io/rustshot/)
+- [История изменений](CHANGELOG.md)
+- [Поддержка и диагностика](SUPPORT.md)
+- [Политика безопасности](SECURITY.md)
+- [Участие в разработке](CONTRIBUTING.md)
+- [Архитектура](ARCHITECTURE.md)
+- [Материалы бренда](BRANDING.md)
 
-## License
+## Лицензия
 
-RustShot is available under the [MIT License](LICENSE).
+RustShot распространяется по [лицензии MIT](LICENSE).
