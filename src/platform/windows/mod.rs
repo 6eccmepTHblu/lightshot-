@@ -5,3 +5,4 @@ pub mod clipboard;
 pub mod keyboard;
 pub mod loader;
 pub mod print;
+pub mod window;

@@ -10,6 +10,7 @@ use rustshot::{
     },
     config::{EditorTool, RgbColor},
     frame::{Frame, PhysicalPoint, PhysicalRect},
+    platform::windows::window::{prepare_instant_show, reveal},
 };
 use softbuffer::{Context, Rect, Surface};
 use windows::Win32::{
@@ -81,6 +82,8 @@ pub struct Overlay {
     /// What the selection phase last left in the surface: the outer `None` means
     /// unknown, so the next draw must be full; the inner one means only `dimmed`.
     presented_selection: Cell<Option<Option<PixelRect>>>,
+    /// The window stays hidden until its first frame is on the surface.
+    awaiting_first_frame: Cell<bool>,
     cursor: PixelPoint,
     selection_anchor: Option<PixelPoint>,
     selection_cursor: Option<PixelPoint>,
@@ -94,6 +97,16 @@ pub struct Overlay {
 impl Drop for Overlay {
     fn drop(&mut self) {
         release_ui_font();
+    }
+}
+
+fn window_hwnd(window: &Window) -> Result<HWND> {
+    let handle = window
+        .window_handle()
+        .context("не удалось получить дескриптор окна редактора")?;
+    match handle.as_raw() {
+        RawWindowHandle::Win32(handle) => Ok(HWND(handle.hwnd.get() as *mut _)),
+        _ => anyhow::bail!("редактор не связан с окном Windows"),
     }
 }
 
@@ -130,6 +143,7 @@ impl Overlay {
             anyhow::anyhow!("не удалось создать поверхность выбора области: {error}")
         })?;
 
+        let awaiting_first_frame = window_hwnd(&window).is_ok_and(prepare_instant_show);
         window.set_visible(true);
         window.focus_window();
         window.request_redraw();
@@ -141,6 +155,7 @@ impl Overlay {
             source,
             dimmed: Vec::new(),
             presented_selection: Cell::new(None),
+            awaiting_first_frame: Cell::new(awaiting_first_frame),
             cursor: PixelPoint::default(),
             selection_anchor: None,
             selection_cursor: None,
@@ -158,14 +173,7 @@ impl Overlay {
     }
 
     pub fn owner_hwnd(&self) -> Result<HWND> {
-        let handle = self
-            .window
-            .window_handle()
-            .context("не удалось получить дескриптор окна редактора")?;
-        match handle.as_raw() {
-            RawWindowHandle::Win32(handle) => Ok(HWND(handle.hwnd.get() as *mut _)),
-            _ => anyhow::bail!("редактор не связан с окном Windows"),
-        }
+        window_hwnd(&self.window)
     }
 
     pub fn set_visible(&self, visible: bool) {
@@ -864,6 +872,9 @@ impl Overlay {
             None => buffer.present(),
         };
         presented.map_err(|error| anyhow::anyhow!("не удалось вывести оверлей: {error}"))?;
+        if self.awaiting_first_frame.replace(false) {
+            reveal(self.owner_hwnd()?);
+        }
         self.presented_selection
             .set(self.editor.is_none().then_some(selection_bounds));
         Ok(())

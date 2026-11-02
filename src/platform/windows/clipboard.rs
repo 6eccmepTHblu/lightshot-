@@ -125,8 +125,9 @@ fn create_dibv5(frame: &Frame) -> Result<OwnedGlobalMemory> {
     let header = BITMAPV5HEADER {
         bV5Size: u32::try_from(header_size).expect("BITMAPV5HEADER size always fits u32"),
         bV5Width: width,
-        // A negative height makes the DIB top-down, matching Frame's row order.
-        bV5Height: -height,
+        // Bottom-up, the conventional row order. Some clipboard managers cannot
+        // show the negative-height top-down form, though it is valid.
+        bV5Height: height,
         bV5Planes: 1,
         bV5BitCount: 32,
         bV5Compression: BI_BITFIELDS,
@@ -145,7 +146,10 @@ fn create_dibv5(frame: &Frame) -> Result<OwnedGlobalMemory> {
     unsafe {
         ptr::write(base.cast::<BITMAPV5HEADER>(), header);
         let output = slice::from_raw_parts_mut(base.add(header_size), image_bytes);
-        rgba_to_bgra(frame.rgba(), output)?;
+        let row_bytes = usize::try_from(frame.width())
+            .context("ширина изображения превышает предел формата DIB")?
+            * RGBA_CHANNELS;
+        top_down_rgba_to_bottom_up_bgra(frame.rgba(), output, row_bytes)?;
     }
 
     // GlobalUnlock reports zero both for a successful final unlock and for an
@@ -155,16 +159,29 @@ fn create_dibv5(frame: &Frame) -> Result<OwnedGlobalMemory> {
     Ok(memory)
 }
 
-fn rgba_to_bgra(source: &[u8], destination: &mut [u8]) -> Result<()> {
-    if source.len() != destination.len() || !source.len().is_multiple_of(RGBA_CHANNELS) {
+fn top_down_rgba_to_bottom_up_bgra(
+    source: &[u8],
+    destination: &mut [u8],
+    row_bytes: usize,
+) -> Result<()> {
+    if source.len() != destination.len()
+        || row_bytes == 0
+        || !row_bytes.is_multiple_of(RGBA_CHANNELS)
+        || !source.len().is_multiple_of(row_bytes)
+    {
         bail!("неверная длина буфера RGBA для буфера обмена");
     }
 
-    for (rgba, bgra) in source
-        .chunks_exact(RGBA_CHANNELS)
-        .zip(destination.chunks_exact_mut(RGBA_CHANNELS))
+    for (source_row, destination_row) in source
+        .chunks_exact(row_bytes)
+        .zip(destination.chunks_exact_mut(row_bytes).rev())
     {
-        bgra.copy_from_slice(&[rgba[2], rgba[1], rgba[0], rgba[3]]);
+        for (rgba, bgra) in source_row
+            .chunks_exact(RGBA_CHANNELS)
+            .zip(destination_row.chunks_exact_mut(RGBA_CHANNELS))
+        {
+            bgra.copy_from_slice(&[rgba[2], rgba[1], rgba[0], rgba[3]]);
+        }
     }
     Ok(())
 }
@@ -234,10 +251,24 @@ mod tests {
     use crate::frame::PhysicalPoint;
 
     #[test]
-    fn converts_rgba_to_bgra() {
+    fn converts_rgba_to_bgra_within_a_row() {
         let mut output = [0_u8; 8];
-        rgba_to_bgra(&[10, 20, 30, 40, 50, 60, 70, 80], &mut output).unwrap();
+        top_down_rgba_to_bottom_up_bgra(&[10, 20, 30, 40, 50, 60, 70, 80], &mut output, 8).unwrap();
         assert_eq!(output, [30, 20, 10, 40, 70, 60, 50, 80]);
+    }
+
+    #[test]
+    fn reverses_the_row_order() {
+        let mut output = [0_u8; 8];
+        top_down_rgba_to_bottom_up_bgra(&[1, 2, 3, 4, 5, 6, 7, 8], &mut output, 4).unwrap();
+        assert_eq!(output, [7, 6, 5, 8, 3, 2, 1, 4]);
+    }
+
+    #[test]
+    fn rejects_a_buffer_that_is_not_whole_rows() {
+        let mut output = [0_u8; 8];
+        assert!(top_down_rgba_to_bottom_up_bgra(&[0; 8], &mut output, 12).is_err());
+        assert!(top_down_rgba_to_bottom_up_bgra(&[0; 8], &mut output, 0).is_err());
     }
 
     #[test]

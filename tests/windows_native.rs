@@ -17,6 +17,7 @@ use windows::{
     core::{w, PCWSTR},
     Win32::{
         Foundation::{HGLOBAL, HWND},
+        Graphics::Gdi::BITMAPV5HEADER,
         System::{
             DataExchange::{
                 CloseClipboard, GetClipboardData, IsClipboardFormatAvailable, OpenClipboard,
@@ -82,6 +83,31 @@ fn clipboard_export_publishes_a_dibv5_image() {
         assert_eq!(
             read_policy_format(owner, w!("CanIncludeInClipboardHistory")),
             u32::from(allow_history)
+        );
+        assert_bottom_up_dib(owner);
+    }
+}
+
+/// The test frame has red and green on top, blue and white below.
+fn assert_bottom_up_dib(owner: HWND) {
+    // SAFETY: the clipboard stays open while its handle is read, the DIB holds a
+    // header followed by 2x2 32-bit pixels, and the lock is balanced before closing.
+    unsafe {
+        OpenClipboard(Some(owner)).expect("clipboard should open");
+        let handle = GetClipboardData(u32::from(CF_DIBV5.0)).expect("DIB should be present");
+        let memory = HGLOBAL(handle.0);
+        let base = GlobalLock(memory).cast::<u8>();
+        let header = base.cast::<BITMAPV5HEADER>().read_unaligned();
+        let pixels = std::slice::from_raw_parts(base.add(size_of::<BITMAPV5HEADER>()), 16).to_vec();
+        let _ = GlobalUnlock(memory);
+        CloseClipboard().expect("clipboard should close");
+
+        assert_eq!((header.bV5Width, header.bV5Height), (2, 2));
+        assert_eq!(&pixels[..4], [255, 0, 0, 255], "first stored pixel is blue");
+        assert_eq!(
+            &pixels[8..12],
+            [0, 0, 255, 255],
+            "third stored pixel is red"
         );
     }
 }
